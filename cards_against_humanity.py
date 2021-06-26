@@ -26,8 +26,8 @@ def parser(mensagem):
 
 def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
-    respondente; retorna um dicionário de czars'''
-    czars = {}
+    respondente; retorna um dicionário de czares'''
+    czares = {}
     for i, mensagem in enumerate(mensagens):
         if mensagem[:36] == 'All answers received! The honourable':
             # assumindo todas as pessoas têm primeiros-nomes distintos
@@ -40,11 +40,11 @@ def crawler(mensagens):
                     # assumindo todas as pessoas têm primeiros-nomes distintos
                     vencedor = candidato.split()[0]
                     break
-            escolhas = czars.get(czar, [])
+            escolhas = czares.get(czar, [])
             escolhas.append(vencedor)
-            czars.setdefault(czar, escolhas)
+            czares.setdefault(czar, escolhas)
     
-    contagem = {czars: Counter(escolhas) for jogador, escolhas in czars.items()}
+    contagem = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     return contagem
         
 contagem = crawler(mensagens)
@@ -56,7 +56,6 @@ porcentagens = {jogador: {jog: val/sum(contagem[jogador].values())
 for jogador, dados in porcentagens.items():
     pontos = list(zip(*dados.items()))
     plt.plot(*pontos, 'o', label=jogador)
-    plt.legend()
     
 # =============================================================================
 # TODO: 
@@ -64,9 +63,11 @@ for jogador, dados in porcentagens.items():
 #   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
 #   plotar melhor os dados
 #   mostrar quem mais atrasa (print('leonardo e thomas'))
+#   levar em conta que certos jogadores estavam ausentes (como?)
 # =============================================================================
 
 plt.title('Escolhas de cada czar')
 plt.ylabel('Porcentagem de ser escolhido')
 plt.xlabel('Escritor da resposta')
+plt.legend()
 plt.show()
