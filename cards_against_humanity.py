@@ -49,23 +49,43 @@ def crawler(mensagens):
                     czar_escolheu = True
                     vencedor = candidato.split()[0]
                     break
+<<<<<<< HEAD
             if czar_escolheu:
                 escolhas = czares.get(czar, [])
                 escolhas.append(vencedor)
                 czares.setdefault(czar, escolhas)
     
+=======
+            escolhas = czares.get(czar, [])
+            escolhas.append(vencedor)
+            czares.setdefault(czar, escolhas)
+>>>>>>> 88d650ae950ba228b893c5af91a8c05f3f378712
     contagem = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     return contagem
-        
+    
+    
 contagem = crawler(mensagens)
-porcentagens = {jogador: {jog: val/sum(contagem[jogador].values()) 
-                          for jog, val in contagem[jogador].items()} 
-                for jogador in contagem}
-
+porcentagens = {czar: {jog: val/sum(contagem[czar].values()) 
+                          for jog, val in contagem[czar].items()} 
+                for czar in contagem}
 
 for czar, escolhas in porcentagens.items():
+<<<<<<< HEAD
     pontos = list(zip(*escolhas.items()))
     plt.plot(*pontos, 'o', label=czar)
+=======
+    pontos = zip(*escolhas.items())
+    plt.plot(*pontos, 'o', label=czar)
+    
+# =============================================================================
+# TODO: 
+#   pegar todos esses dados, ordenar os jogadores, colocar em matriz (?)
+#   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
+#   plotar melhor os dados
+#   mostrar quem mais atrasa (print('leonardo e thomas'))
+#   levar em conta que certos jogadores estavam ausentes (como?)
+# =============================================================================
+>>>>>>> 88d650ae950ba228b893c5af91a8c05f3f378712
 
 plt.title('Escolhas de cada czar')
 plt.ylabel('Chance de ser escolhido')
