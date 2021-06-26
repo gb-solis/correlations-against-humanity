@@ -43,6 +43,7 @@ def crawler(mensagens):
     czares = {}
     for i, mensagem in enumerate(mensagens):
         if mensagem[:36] == 'All answers received! The honourable':
+            czar_escolheu = False
             # assumindo todas as pessoas têm primeiros-nomes distintos
             czar = mensagem.split()[5]
             for j, resultado in enumerate(mensagens[i+1:]):
@@ -51,11 +52,13 @@ def crawler(mensagens):
                 candidato = resultado[0]
                 if 'wins a point!' in candidato:
                     # assumindo todas as pessoas têm primeiros-nomes distintos
+                    czar_escolheu = True
                     vencedor = candidato.split()[0]
                     break
-            escolhas = czares.get(czar, [])
-            escolhas.append(vencedor)
-            czares.setdefault(czar, escolhas)
+            if czar_escolheu:
+                escolhas = czares.get(czar, [])
+                escolhas.append(vencedor)
+                czares.setdefault(czar, escolhas)
     
     contagem = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     return contagem
