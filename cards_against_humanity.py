@@ -18,12 +18,6 @@ mensagens = [msg['text'] for msg in mensagens_totais if msg['from']=='Chat Again
 msg_inicial = 91
 mensagens = mensagens[msg_inicial:]
 
-def parser(mensagem):
-    '''uma mensagem pode ser uma string ou uma lista (se houver links/formatação)
-    '''
-    pass
-
-
 def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
     respondente; retorna um dicionário de czares'''
@@ -43,19 +37,18 @@ def crawler(mensagens):
             escolhas = czares.get(czar, [])
             escolhas.append(vencedor)
             czares.setdefault(czar, escolhas)
-    
     contagem = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     return contagem
-        
+    
+    
 contagem = crawler(mensagens)
-porcentagens = {jogador: {jog: val/sum(contagem[jogador].values()) 
-                          for jog, val in contagem[jogador].items()} 
-                for jogador in contagem}
+porcentagens = {czar: {jog: val/sum(contagem[czar].values()) 
+                          for jog, val in contagem[czar].items()} 
+                for czar in contagem}
 
-
-for jogador, dados in porcentagens.items():
-    pontos = list(zip(*dados.items()))
-    plt.plot(*pontos, 'o', label=jogador)
+for czar, escolhas in porcentagens.items():
+    pontos = zip(*escolhas.items())
+    plt.plot(*pontos, 'o', label=czar)
     
 # =============================================================================
 # TODO: 
@@ -67,7 +60,7 @@ for jogador, dados in porcentagens.items():
 # =============================================================================
 
 plt.title('Escolhas de cada czar')
-plt.ylabel('Porcentagem de ser escolhido')
-plt.xlabel('Escritor da resposta')
-plt.legend()
+plt.ylabel('Chance de ser escolhido')
+plt.xlabel('Autor da resposta')
+plt.legend(fontsize='small')
 plt.show()
