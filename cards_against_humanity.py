@@ -1,8 +1,21 @@
+# =============================================================================
+# TODO: 
+#   pegar todos esses dados, ordenar os jogadores, colocar em matriz (?)
+#   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
+#   plotar melhor os dados
+#   mostrar quem mais atrasa (print('leonardo e thomas'))
+#   levar em conta que certos jogadores estavam ausentes (como?)
+# =============================================================================
+
 import json
+import os
 from collections import Counter
 from matplotlib import pyplot as plt
 
-path = r'C:\Users\Gabriel\Downloads\Telegram Desktop\ChatExport_2021-06-24\result.json'
+local_folder = os.path.dirname(os.path.abspath(__file__))
+path = os.path.join(local_folder, 'result.json')
+
+# path = r'C:\Users\Gabriel\Downloads\Telegram Desktop\ChatExport_2021-06-24\result.json'
 
 with open(path, 'r', encoding='utf8') as file:
     dados = json.load(file)
@@ -56,15 +69,6 @@ porcentagens = {jogador: {jog: val/sum(contagem[jogador].values())
 for jogador, dados in porcentagens.items():
     pontos = list(zip(*dados.items()))
     plt.plot(*pontos, 'o', label=jogador)
-    
-# =============================================================================
-# TODO: 
-#   pegar todos esses dados, ordenar os jogadores, colocar em matriz (?)
-#   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
-#   plotar melhor os dados
-#   mostrar quem mais atrasa (print('leonardo e thomas'))
-#   levar em conta que certos jogadores estavam ausentes (como?)
-# =============================================================================
 
 plt.title('Escolhas de cada czar')
 plt.ylabel('Porcentagem de ser escolhido')
