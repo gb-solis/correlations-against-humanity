@@ -9,6 +9,7 @@
 
 import json
 import os
+import numpy as np
 from collections import Counter
 from matplotlib import pyplot as plt
 
@@ -35,6 +36,7 @@ def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
     respondente; retorna um dicionário de czares'''
     czares = {}
+    jogadores = [] # conjunto dos que mandaram ao menos uma carta
     for i, mensagem in enumerate(mensagens):
         if mensagem[:36] == 'All answers received! The honourable':
             czar_escolheu = False
@@ -48,47 +50,55 @@ def crawler(mensagens):
                     # assumindo todas as pessoas têm primeiros-nomes distintos
                     czar_escolheu = True
                     vencedor = candidato.split()[0]
+                    if vencedor not in jogadores:
+                        jogadores.append(vencedor)
                     break
-<<<<<<< HEAD
+                
             if czar_escolheu:
-                escolhas = czares.get(czar, [])
-                escolhas.append(vencedor)
-                czares.setdefault(czar, escolhas)
-    
-=======
-            escolhas = czares.get(czar, [])
-            escolhas.append(vencedor)
-            czares.setdefault(czar, escolhas)
->>>>>>> 88d650ae950ba228b893c5af91a8c05f3f378712
+                if czar in czares:
+                    czares[czar].append(vencedor)
+                else:
+                    czares[czar] = [vencedor]
+
     contagem = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
-    return contagem
+    
+    # Preencher jogadores que cada czar NÃO escolheu com 0
+    for czar in contagem:
+        for jogador in jogadores:
+            if jogador not in contagem[czar]:
+                contagem[czar][jogador] = 0
+    return (contagem, jogadores)
     
     
-contagem = crawler(mensagens)
-porcentagens = {czar: {jog: val/sum(contagem[czar].values()) 
-                          for jog, val in contagem[czar].items()} 
-                for czar in contagem}
+contagem, jogadores = crawler(mensagens)
 
-for czar, escolhas in porcentagens.items():
-<<<<<<< HEAD
-    pontos = list(zip(*escolhas.items()))
-    plt.plot(*pontos, 'o', label=czar)
-=======
-    pontos = zip(*escolhas.items())
-    plt.plot(*pontos, 'o', label=czar)
+def plot_chances(contagem):
+    porcentagens = {czar: {jog: val/sum(contagem[czar].values()) 
+                              for jog, val in contagem[czar].items() if val != 0} 
+                    for czar in contagem}
     
-# =============================================================================
-# TODO: 
-#   pegar todos esses dados, ordenar os jogadores, colocar em matriz (?)
-#   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
-#   plotar melhor os dados
-#   mostrar quem mais atrasa (print('leonardo e thomas'))
-#   levar em conta que certos jogadores estavam ausentes (como?)
-# =============================================================================
->>>>>>> 88d650ae950ba228b893c5af91a8c05f3f378712
+    for czar, escolhas in porcentagens.items():
+        pontos = list(zip(*escolhas.items()))
+        plt.plot(*pontos, 'o', label=czar)
+    
+    plt.title('Escolhas de cada czar')
+    plt.ylabel('Chance de ser escolhido')
+    plt.xlabel('Autor da resposta')
+    plt.legend(fontsize='small')
+    plt.show()
 
-plt.title('Escolhas de cada czar')
-plt.ylabel('Chance de ser escolhido')
-plt.xlabel('Autor da resposta')
-plt.legend(fontsize='small')
-plt.show()
+# Faz um heat map 2D das escolhas que cada czar (eixo y) fez de cada jogador (eixo x)
+# Tutorial usado: https://www.pythonpool.com/matplotlib-heatmap/
+def plot_heatmap(contagem, jogadores):
+    czares = contagem.keys()
+    matriz_escolhas = [[contagem[czar][jogador] for jogador in jogadores] for czar in czares]
+    
+    plt.xticks(ticks=np.arange(len(jogadores)), labels=jogadores, rotation=90)
+    plt.yticks(ticks=np.arange(len(czares)), labels=czares)
+    plt.xlabel('Autor da resposta')
+    plt.ylabel('Czar')
+    heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
+    plt.colorbar(heatmap)
+    
+plot_chances(contagem)
+plot_heatmap(contagem, jogadores)
