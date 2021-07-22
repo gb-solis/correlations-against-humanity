@@ -70,36 +70,45 @@ def crawler(mensagens):
     return contagem
 
 
-def plot_chances(contagem):
-    porcentagens = {czar: {jog: val/sum(contagem[czar].values()) 
-                              for jog, val in contagem[czar].items()}
-                    for czar in (czar for czar in contagem if contagem[czar])}
+def plot_chances(contagem, normalizar=True):
+    # remove czares que não jogaram e completa com zero jogadores faltantes em cada czar
+    dados = {czar: {jog: contagem[czar].get(jog, 0) for jog in contagem if jog!=czar}
+                 for czar in contagem if contagem[czar]}
+    if normalizar:
+        for czar in dados:
+            N = max(1, sum(dados[czar].values()))
+            dados[czar] = {jog: val/N for jog, val in dados[czar].items()}
     
     # plot "vazio", só para inicializar o primeiro nome no eixo x e garantir o 
     # bom-ordenamento
-    primeiro = list(porcentagens.keys())[0]
+    primeiro = list(dados.keys())[0]
     plt.plot([primeiro], [None], color='k')
 
-    for czar, escolhas in porcentagens.items():
+    for czar, escolhas in dados.items():
         pontos = list(zip(*escolhas.items()))
         plt.plot(*pontos, 'o:', label=czar)
         
-    plt.title('Escolhas de cada czar')
+    plt.title('Escolhas de cada czar' + normalizar*' (normalizadas)')
     plt.ylabel('Chance de ser escolhido')
     plt.xlabel('Autor da resposta')
+    plt.xticks(rotation=45)
     plt.legend(fontsize='x-small')
     plt.show()
 
 
 # Faz um heat map 2D das escolhas que cada czar (eixo y) fez de cada jogador (eixo x)
 # Tutorial usado: https://www.pythonpool.com/matplotlib-heatmap/
-def plot_heatmap(contagem):
+def plot_heatmap(contagem, normalizar=True):
     czares = [czar for czar in contagem.keys() if contagem[czar]]
     matriz_escolhas = [[contagem[czar].get(jog, 0) for jog in contagem] 
                        for czar in czares]
+    if normalizar:
+        for czar in range(len(matriz_escolhas)):
+            N = max(1, sum(matriz_escolhas[czar]))
+            matriz_escolhas[czar] = [i/N for i in matriz_escolhas[czar]]
     plt.xticks(ticks=range(len(contagem)), labels=contagem.keys(), rotation=90)
     plt.yticks(ticks=range(len(czares)), labels=czares)
-    plt.title('Escolhas de cada czar')
+    plt.title('Escolhas de cada czar' + normalizar*' (normalizadas)')
     plt.xlabel('Autor da resposta')
     plt.ylabel('Czar')
     heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
@@ -109,5 +118,5 @@ def plot_heatmap(contagem):
     
 contagem = crawler(mensagens)
     
-plot_chances(contagem)
-plot_heatmap(contagem)
+plot_chances(contagem, normalizar=True)
+plot_heatmap(contagem, normalizar=True)
