@@ -48,6 +48,12 @@ def parser(mensagem):
         # assumindo todas as pessoas têm primeiros-nomes distintos
         vencedor = mensagem[0].split()[0]
         finalizada = True
+    # caso a lista tenha sido desmantelada:
+    elif 'wins a point!' in mensagem:
+        # assumindo todas as pessoas têm primeiros-nomes distintos
+        vencedor = mensagem.split()[0]
+        finalizada = True
+    
     return rodada(czar, vencedor, recebida, finalizada)
         
     
