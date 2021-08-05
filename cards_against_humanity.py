@@ -1,5 +1,8 @@
 # =============================================================================
 # TODO: 
+#   separar mensagens por jogos, fazer análise por jogo
+#   fazer gif cronológico do histograma
+#   fazer função que trace o desempenho cronologicamente
 #   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
 #   plotar melhor os dados
 #   mostrar quem mais atrasa (print('leonardo e thomas'))
@@ -7,8 +10,7 @@
 # =============================================================================
 
 import json
-import numpy as np
-from collections import Counter
+from collections import Counter, namedtuple
 from matplotlib import pyplot as plt
 
 
@@ -28,26 +30,45 @@ mensagens = [msg['text'] for msg in mensagens_totais
 msg_inicial = 91
 mensagens = mensagens[msg_inicial:]
 
+
+def parser(mensagem):
+    '''lê a mensagem e a interpreta "o que está acontecendo", retornando o czar
+    e o vencedor da rodada, se houver'''
+    rodada = namedtuple('Rodada', ('czar', 'vencedor', 'recebida', 'finalizada'))
+    czar = vencedor = None
+    recebida = finalizada = False
+    
+    if mensagem[:36] == 'All answers received! The honourable':
+        # assumindo todas as pessoas têm primeiros-nomes distintos
+        czar = mensagem.split()[5]
+        recebida = True
+    # as mensagens de resultado contêm texto bold, então são listas
+    # e o nome do vencedor deve estar no primeiro elemento
+    elif 'wins a point!' in mensagem[0]:
+        # assumindo todas as pessoas têm primeiros-nomes distintos
+        vencedor = mensagem[0].split()[0]
+        finalizada = True
+    return rodada(czar, vencedor, recebida, finalizada)
+        
+    
+
 def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
     respondente; retorna um dicionário de czares'''
     czares = {}
     jogadores = [] # conjunto dos que mandaram ao menos uma carta ou foram czar
     for i, mensagem in enumerate(mensagens):
-        if mensagem[:36] == 'All answers received! The honourable':
-            # assumindo todas as pessoas têm primeiros-nomes distintos
-            czar = mensagem.split()[5]
+        rodada_A = parser(mensagem)
+        if rodada_A.recebida:
+            czar = rodada_A.czar
             if czar not in jogadores:
                 jogadores.append(czar)
             for j, resultado in enumerate(mensagens[i+1:]):
-                if resultado[:36] == 'All answers received! The honourable':
-                    break
-                # as mensagens de resultado contêm texto bold, então são listas
-                # e o nome do vencedor deve estar no primeiro elemento
-                candidato = resultado[0]
-                if 'wins a point!' in candidato:
-                    # assumindo todas as pessoas têm primeiros-nomes distintos
-                    vencedor = candidato.split()[0]
+                rodada_B = parser(resultado)
+                if rodada_B.recebida:
+                    break # chegamos ao início da próxima pergunta
+                elif rodada_B.finalizada:
+                    vencedor = rodada_B.vencedor
                     if vencedor == czar:
                         print(f'Erro! Vencedor {vencedor} é o mesmo que o czar {czar}')
                         print(f'Ganhou para pergunta número {i}: \n\n {mensagem}')
@@ -60,13 +81,14 @@ def crawler(mensagens):
                         czares[czar] = [vencedor]
                     break
 
-    contagem_desord = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
+    contagem_desordenada = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     não_czares = [jogador for jogador in jogadores if jogador not in czares]
-    contagem_desord.update({não_czar: {} for não_czar in não_czares})
+    contagem_desordenada.update({não_czar: {} for não_czar in não_czares})
     
+    # ordenaremos a contagem_desordenada
     contagem = {czar: dict(sorted(escolhas.items(), 
-                                  key=lambda x: list(contagem_desord).index(x[0])))
-                for czar, escolhas in contagem_desord.items()}
+                                  key=lambda x: list(contagem_desordenada).index(x[0])))
+                for czar, escolhas in contagem_desordenada.items()}
     return contagem
 
 
