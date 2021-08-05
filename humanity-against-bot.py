@@ -1,4 +1,5 @@
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from random import randint
 import logging
 
 # lidar com erros
@@ -17,8 +18,18 @@ def ajuda(update, context):
     update.message.reply_text('Vou ajudar porra nenhuma')
     
 def conversa(update, context):
-    # pass
-    update.message.reply_text('Fica de boa pedro')
+    nome = update.message.chat.first_name
+    sobrenome = update.message.chat.last_name
+    frases = ('Faz favor, n me dirige a palavra naum',
+               f'Fica de boa ai {nome}',
+               f'cansou de desapontar a família {sobrenome} e veio encher o saco?',
+               f'{nome}: um contrargumento para a liberdade de expressão',
+               'AAAAAAAAAAAAAAAAAAAAAAAAAA'
+               )
+    if 'bot' in update.message.text:
+        índice = randint(0, len(frases)-1)
+        mensagem = frases[índice]
+        update.message.reply_text(mensagem)
 
 def erro(update, context):
     update.message.reply_text('Ocorreu um erro!')    
