@@ -137,8 +137,9 @@ def plot_heatmap(contagem, normalizar=True):
     plt.colorbar(heatmap)
     plt.show()
     
-    
-contagem = crawler(mensagens)
-    
-plot_chances(contagem, normalizar=True)
-plot_heatmap(contagem, normalizar=True)
+
+if __name__=="__main__":
+    contagem = crawler(mensagens)
+        
+    plot_chances(contagem, normalizar=True)
+    plot_heatmap(contagem, normalizar=True)
