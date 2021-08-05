@@ -1,12 +1,13 @@
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from random import randint
 import logging
+from cards_against_humanity import parser
 
 # lidar com erros
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                      level=logging.INFO)
 
-
+# pegar token
 with open('token.txt', 'r') as file:
     token = file.read()
 
@@ -33,6 +34,7 @@ def patada(update, context):
                f'cansou de desapontar a família {sobrenome} e veio encher o saco',
                f'{nome} {sobrenome}: um contrargumento para a liberdade de expressão',
                3*'AAAAAAAAAAAAAAAAAAAAAAAAAA',
+               'cringe',
                'cringe')
     índice = randint(0, len(frases)-1)
     mensagem = frases[índice]
@@ -42,14 +44,29 @@ def patada(update, context):
 def cards_against_humanity_bot(update, context):
     '''Lê a mensagem do cards-against-humanity-bot e atualiza a base de
     dados conformemente'''
+    path_mensagens = 'mensagens.txt'
+    path_histórico = 'histórico.txt'
+    # path_chutes = 'chutes.txt'
+    # path_pontos_chutes = 'chutes_pontos.txt'
+    
     mensagem = update.message.text
+    rodada = parser(mensagem)
+    # anota o vencedor (deveríamos anotar o czar também, mas como?)
+    if rodada.finalizada:
+        vencedor = rodada.vencedor
+        with open(path_histórico, 'a') as file:
+            file.write(vencedor + '\n')
+    # salva as mensagens do bot para análise posterior
+    if rodada.finalizada or rodada.recebida:
+        with open(path_mensagens, 'a') as file:
+            file.write(mensagem + '\n')
 
 
 def conversa(update, context):
     '''ações tomadas caso o usuário mande uma mensagem sem comandos'''
     if update.message.from_user.id == 'user171291664': # msg do CAH bot
         cards_against_humanity_bot(update, context)
-    elif 'bot' in update.message.text:
+    elif 'bot' in update.message.text.lower():
         patada(update, context)
     elif update.message.text[-1] == '?':
         update.message.reply_text('sua mãe')
@@ -61,7 +78,7 @@ def erro(update, context):
 
 ############### corpo do programa ##################################
 def main():
-    # setup inicial
+    # setup inicial, só aceita
     updater = Updater(token, use_context=True)
     dispatcher = updater.dispatcher
 
@@ -73,13 +90,13 @@ def main():
     dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command),
                                           conversa))
 
-    # add an handler for errors
+    # add a handler for errors
     dispatcher.add_error_handler(erro)
 
-    # start your shiny new bot
+    # start bot
     updater.start_polling()
-
     # run the bot until Ctrl-C
     updater.idle()
 
-main()
+if __name__=="__main__":
+    main()
