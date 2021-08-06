@@ -16,6 +16,7 @@ with open('token.txt', 'r') as file:
 ################### funções associadas a commandos ###################
 def start(update, context):
     '''mensagem de boas-vindas ao usuário. Resposta ao comando /start'''
+    print('start' + 30*'#')
     nome = update.message.from_user.first_name
     update.message.reply_text(f"Yo {nome}, fala ae")
 
@@ -43,11 +44,13 @@ def patada(update, context):
 
 
 def cards_against_humanity_bot(update, context):
+    print('cards against humanity bot' + 30*'#')
     '''Lê a mensagem do cards-against-humanity-bot e atualiza a base de
     dados conformemente'''
     path_mensagens = 'mensagens.txt'
     path_histórico = 'histórico.txt'
     
+    print('Recebi mensagem do bot!')
     mensagem = update.message.text
     rodada = parser(mensagem)
     # anota o vencedor (deveríamos anotar o czar também...)
@@ -59,13 +62,15 @@ def cards_against_humanity_bot(update, context):
     if rodada.finalizada or rodada.recebida:
         with open(path_mensagens, 'a') as file:
             file.write(mensagem + '\n\n')
+    else:
+        with open('rejeitadas.txt', 'a') as file:
+            file.write(mensagem + '\n\n\n\n')
 
 
 def conversa(update, context):
+    print('conversa' + 30*'#')
     '''ações tomadas caso o usuário mande uma mensagem sem comandos'''
-    if update.message.from_user.id == 'user171291664': # msg do CAH bot
-        cards_against_humanity_bot(update, context)
-    elif 'bot' in update.message.text.lower():
+    if 'bot' in update.message.text.lower():
         patada(update, context)
     elif update.message.text[-1] == '?':
         update.message.reply_text('sua mãe')
@@ -78,36 +83,91 @@ def erro(update, context):
 ################################# menu ########################################
 
 # uma finite-state machine
-MENU, ESCOLHA, FIM = range(3)
-
-def início(update, context):
-    '''mensagem de boas-vindas ao usuário. Resposta ao comando /start'''
-    nome = update.message.from_user.first_name
-    update.message.reply_text(f"Yoo {nome}, fala ae")
-    print('mandei pro menu')
-    return MENU
-
+MENU, ESCOLHA, DESABAFO, FIM, *_ = range(10)
 
 def menu(update, context):
-    print('menu')
+    print('menu fim')
     entradas = (('chutar vencedor',), ('reclamar do último czar',),)
     update.message.reply_text('O que quer de mim?',
         reply_markup=ReplyKeyboardMarkup(entradas, one_time_keyboard=True,))
     return ESCOLHA
     
 
+def início(update, context):
+    print('início' + 30*'#')
+    '''mensagem de boas-vindas ao usuário. Resposta ao comando /start'''
+    nome = update.message.from_user.first_name
+    update.message.reply_text(f"Yoo {nome}, fala ae")
+    print('mandei pro menu')
+    return menu(update, context)
+
+
+def pegar_opções():
+    '''retorna lista das cartas jogadas na última rodada, e o czar'''
+    print('pegar opções' + 30*'#')
+    with open('mensagens.txt', 'r', encoding='utf8') as file:
+        dados = file.read()
+    rodadas = dados.split('\n\n' + 80*'_' + '\n\n')
+    mensagens = [rodada.split('\n\n' + 80*'-' + '\n\n') for rodada in rodadas]
+    última = mensagens[-1][0]
+    escolhas = última.split('\n\n')[-1].split('\n  - ')
+    escolhas[0] = escolhas[0][4:]
+
+    czar = parser(última).czar
+    # print(escolhas)
+    return [[e] for e in escolhas], czar
+
+
+def pegar_resultado():
+    '''retorna a última resposta escolhida e seu autor'''
+    with open('mensagens.txt', 'r', encoding='utf8') as file:
+        dados = file.read()
+    rodadas = dados.split('\n\n' + 80*'_' + '\n\n')
+    mensagens = [rodada.split('\n\n' + 80*'-' + '\n\n') for rodada in rodadas]
+    última = mensagens[-1][1]
+    linhas = última.splitlines()
+    vencedor = linhas[0].split()[:-3]
+    
+
+
+def pegar_contexto():
+    '''retorna czar e vencedor (se houver) da última rodada'''
+    _, czar = pegar_opções()
+    resposta, vencedor = 0,0
+    
+
+
 def chutar(update, context):
-    opções = (('1. sua mãe',), ('2. minha carta',), ('3. nenhuma',),)
-    update.message.reply_text('Que carta você acha que vai ganhar?',
+    print('chutar' + 30*'#')
+    opções, czar = pegar_opções()
+    # opções = [[1],[2]]
+    update.message.reply_text(f'Que carta você acha que {czar} vai escolher?',
         reply_markup=ReplyKeyboardMarkup(opções, one_time_keyboard=True,))
     return FIM
 
 
+def opinar(update, context):
+    # opções = pegar_opções()
+    update.message.reply_text('Você concordou com a escolha do czar?')
+    
+
+
 def reclamar(update, context):
     update.message.reply_text('Pode desabafar')
-    return MENU
+    return DESABAFO
     # return ConversationHandler.END
     
+def empatizar(update, context):
+    usuário = update.message.from_user
+    nome = usuário.first_name + ' ' + usuário.last_name
+    desabafo = update.message.text
+    with open('desabafos.txt', 'a') as file:
+        file.write(f'{nome}: {desabafo}\n\n')
+    
+    respostas = ('uhum, uhum, põe pra fora', 'nossa, muito válida sua reclamação',)
+    índice = randint(0, len(respostas)-1)
+    update.message.reply_text(respostas[índice])
+    return menu(update, context)
 
 def fim(update, context):
     path_chutes = 'chutes.txt'
@@ -117,21 +177,22 @@ def fim(update, context):
     print(nome)
     with open(path_chutes, 'a') as file:
         file.write(f'{nome}: {chute}\n')
-    return MENU
+    return menu(update, context)
     # return ConversationHandler.END
 
 
 def cancelar(update, context):
     update.message.reply_text('#cancelado')
-    return ConversationHandler.END
+    return menu()
 
 
 menu_handler = ConversationHandler(
-    entry_points=[CommandHandler('menu', menu)],
-    # entry_points=[CommandHandler('start', início)],
-    states={#MENU: MessageHandler(Filters.all, menu)],
+    # entry_points=[CommandHandler('menu', menu)],
+    entry_points=[CommandHandler('start', início)],
+    states={MENU: [MessageHandler(Filters.all, menu)],
             ESCOLHA: [MessageHandler(Filters.regex(r'chutar'), chutar),
                       MessageHandler(Filters.regex(r'reclamar'), reclamar)],
+            DESABAFO: [MessageHandler(Filters.all, empatizar)],
             FIM: [MessageHandler(Filters.all, fim)]},
     fallbacks=[CommandHandler('cancelar', cancelar)]
     )
@@ -153,6 +214,10 @@ def main():
     
     # menu
     dispatcher.add_handler(menu_handler)
+    
+    # handler para mensagens do bot
+    dispatcher.add_handler(MessageHandler(Filters.via_bot(
+        '@chat_against_humanity_bot'), cards_against_humanity_bot))
     
     # handler pra texto normal, sem comandos
     dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command),
