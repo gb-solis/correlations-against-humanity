@@ -233,6 +233,16 @@ def plot_histórico(histórico, jogadores):
 #     plt.show()
 
 
+def plot_distribuição_pontos(histórico):
+    pontos_finais = Counter(rodada.vencedor for rodada in histórico)
+    jogadores, pontos = zip(*pontos_finais.most_common())
+    plt.plot(jogadores, pontos, 'o-')
+    plt.title('Distribuição final de pontos')
+    plt.ylabel('Pontos')
+    plt.xticks(rotation=45)
+    plt.show()
+
+
 def main():
     jogo = jogos[-1]
     histórico, jogadores = crawler(jogo)
@@ -241,6 +251,10 @@ def main():
     plot_chances(contagem, normalizar=not True)
     plot_heatmap(contagem, normalizar=not True)
     plot_histórico(histórico, jogadores)
+    
+    # for jogo in jogos:
+    #     histórico, jogadores = crawler(jogo)
+    #     plot_distribuição_pontos(histórico)
     
 
 if __name__=="__main__":
