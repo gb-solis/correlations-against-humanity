@@ -41,9 +41,9 @@ for msg in mensagens:
 
 # objeto que representa uma rodada
 rodada = namedtuple('Rodada', 
-                        ('czar', 'vencedor', 'pergunta', 'resposta', 
-                             'alternativas', 'recebida', 'finalizada'),
-                        defaults=(None, None, None, None, None, False, False))
+                    ('czar', 'vencedor', 'pergunta', 'resposta', 
+                         'alternativas', 'recebida', 'finalizada'),
+                    defaults=(None, None, None, None, None, False, False))
 
 
 def parser_alternativas(mensagem):
@@ -85,6 +85,7 @@ def parser(mensagem):
         
 
 def combina_dados(rodada1, rodada2):
+    '''combina os dados de duas namedtuples, dando erro se forem inconsistentes'''
     atributos = []
     for a, b in zip(rodada1, rodada2):
         if (any((a,b)) and not all((a,b))) or a==b:
@@ -197,7 +198,6 @@ def plot_heatmap(contagem, normalizar=True):
         heatmap = plt.imshow(matriz_escolhas, cmap=cmap, interpolation='nearest')
         plt.colorbar(heatmap, format='%d', 
                      ticks=range(n_max+1))
-        # como fazer a barra lateral ser 
     plt.show()
 
 
