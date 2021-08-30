@@ -30,6 +30,15 @@ mensagens = [msg['text'] for msg in mensagens_totais
 msg_inicial = 91
 mensagens = mensagens[msg_inicial:]
 
+# separar por jogos
+jogos = [[]]
+for msg in mensagens:
+    if 'is starting a new game of xyzzy!' in msg[0]: # msg de início contém texto formatado
+        jogos.append([msg])
+    else:
+        jogos[-1].append(msg)
+
+
 # objeto que representa uma rodada
 rodada = namedtuple('Rodada', 
                         ('czar', 'vencedor', 'pergunta', 'resposta', 
@@ -178,18 +187,44 @@ def plot_heatmap(contagem, normalizar=True):
     plt.title('Escolhas de cada czar' + normalizar*' (normalizadas)')
     plt.xlabel('Autor da resposta')
     plt.ylabel('Czar')
-    heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
-    plt.colorbar(heatmap)
+    
+    if normalizar:
+        heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
+        plt.colorbar(heatmap)
+    else:
+        n_max = max(max(i) for i in matriz_escolhas)
+        cmap = plt.cm.get_cmap('Blues')#, n_max+1)
+        heatmap = plt.imshow(matriz_escolhas, cmap=cmap, interpolation='nearest')
+        plt.colorbar(heatmap, format='%d', 
+                     ticks=range(n_max+1))
+        # como fazer a barra lateral ser 
+    plt.show()
+
+
+def plot_histórico(histórico, jogadores):   
+    '''plota o histórico de pontos de cada jogador'''
+    vitórias = {jogador: [1 if jogador==rodada.vencedor else 0 
+                          for rodada in histórico] for jogador in jogadores}
+    for jogador, lista in vitórias.items():
+        i = 0
+        curva = [0] + [(i:=i+d) for d in lista]
+        plt.plot(curva, '.-', label=jogador)
+    plt.title('Histórico de pontos')
+    plt.legend(fontsize='x-small')
+    plt.xlabel('Rodada')
+    plt.ylabel('Pontos')
     plt.show()
 
 
 def main():
-    histórico, jogadores = crawler(mensagens)
+    jogo = jogos[-1]
+    histórico, jogadores = crawler(jogo)
     contagem = conta(histórico, jogadores)
         
-    plot_chances(contagem, normalizar=True)
-    plot_heatmap(contagem, normalizar=True)
-
+    plot_chances(contagem, normalizar=not True)
+    plot_heatmap(contagem, normalizar=not True)
+    plot_histórico(histórico, jogadores)
+    
 
 if __name__=="__main__":
     main()
