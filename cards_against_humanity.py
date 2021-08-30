@@ -1,8 +1,6 @@
 # =============================================================================
 # TODO: 
-#   separar mensagens por jogos, fazer análise por jogo
 #   fazer gif cronológico do histograma
-#   fazer função que trace o desempenho cronologicamente
 #   ver como cada czar se diferencia da média para cada respondente, em desvios-padrão
 #   plotar melhor os dados
 #   mostrar quem mais atrasa (print('leonardo e thomas'))
@@ -14,36 +12,37 @@ from collections import Counter, namedtuple
 from matplotlib import pyplot as plt
 
 
-path = 'result.json'
-
-with open(path, 'r', encoding='utf8') as file:
-    dados = json.load(file)
-
-mensagens_totais = [msg for msg in dados['messages'] if msg['type']=='message']
-
-# queremos analisar correlações entre escolhas de pessoas
-# essa informação está contida nas mensagens do bot; podemos descartar as restantes
-mensagens = [msg['text'] for msg in mensagens_totais 
-             if msg['from']=='Chat Against Humanity']
-
-# antes dessa mensagem, o jogo era só Gabriel, Artur e Leo; descartei
-msg_inicial = 91
-mensagens = mensagens[msg_inicial:]
-
-# separar por jogos
-jogos = [[]]
-for msg in mensagens:
-    if 'is starting a new game of xyzzy!' in msg[0]: # msg de início contém texto formatado
-        jogos.append([msg])
-    else:
-        jogos[-1].append(msg)
-
-
 # objeto que representa uma rodada
 rodada = namedtuple('Rodada', 
                     ('czar', 'vencedor', 'pergunta', 'resposta', 
                          'alternativas', 'recebida', 'finalizada'),
                     defaults=(None, None, None, None, None, False, False))
+
+
+def abre_dados(path):
+    with open(path, 'r', encoding='utf8') as file:
+        dados = json.load(file)
+    
+    mensagens_totais = [msg for msg in dados['messages'] if msg['type']=='message']
+    
+    # queremos analisar correlações entre escolhas de pessoas
+    # essa informação está contida nas mensagens do bot; podemos descartar as restantes
+    mensagens = [msg['text'] for msg in mensagens_totais 
+                 if msg['from']=='Chat Against Humanity']
+    
+    # antes dessa mensagem, o jogo era só Gabriel, Artur e Leo; descartei
+    msg_inicial = 91
+    mensagens = mensagens[msg_inicial:]
+    
+    # separar por jogos
+    jogos = [[]]
+    for msg in mensagens:
+        if 'is starting a new game of xyzzy!' in msg[0]: # msg de início contém texto formatado
+            jogos.append([msg])
+        else:
+            jogos[-1].append(msg)
+    
+    return jogos
 
 
 def parser_alternativas(mensagem):
@@ -244,7 +243,11 @@ def plot_distribuição_pontos(histórico):
 
 
 def main():
+    path = 'result.json'
+    
+    jogos = abre_dados(path)
     jogo = jogos[-1]
+    
     histórico, jogadores = crawler(jogo)
     contagem = conta(histórico, jogadores)
         
@@ -252,9 +255,9 @@ def main():
     plot_heatmap(contagem, normalizar=not True)
     plot_histórico(histórico, jogadores)
     
-    # for jogo in jogos:
-    #     histórico, jogadores = crawler(jogo)
-    #     plot_distribuição_pontos(histórico)
+    for jogo in jogos:
+        histórico, jogadores = crawler(jogo)
+        plot_distribuição_pontos(histórico)
     
 
 if __name__=="__main__":
