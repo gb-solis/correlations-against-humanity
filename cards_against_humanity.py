@@ -30,39 +30,67 @@ mensagens = [msg['text'] for msg in mensagens_totais
 msg_inicial = 91
 mensagens = mensagens[msg_inicial:]
 
+# objeto que representa uma rodada
+rodada = namedtuple('Rodada', 
+                        ('czar', 'vencedor', 'pergunta', 'resposta', 
+                             'alternativas', 'recebida', 'finalizada'),
+                        defaults=(None, None, None, None, None, False, False))
+
+
+def parser_alternativas(mensagem):
+    '''parser para mensagens do tipo "All answers received"'''
+    início, fim = mensagem.split('\n\n')
+    czar = início.split()[5]
+    pergunta = início.splitlines()[1][10:]
+    alternativas = fim.split('\n  - ')
+    alternativas[0] = alternativas[0][4:]
+    return {'czar': czar, 'pergunta': pergunta, 'alternativas': alternativas}
+
+
+def parser_resultados(mensagem):
+    ''' parser para mensagens do tipo "x wins a point!" '''
+    if isinstance(mensagem, str):
+        linhas = mensagem.splitlines()
+        vencedor = linhas[0].rstrip(' wins a point!')
+        resposta = linhas[1] # copia a resposta + enunciado! TODO: resolver
+    elif isinstance(mensagem, list):
+        vencedor = mensagem[0].split()[0]
+        resposta = mensagem[1]['text']
+    return {'vencedor': vencedor, 'resposta': resposta}
+
 
 def parser(mensagem):
-    '''lê a mensagem e a interpreta "o que está acontecendo", retornando o czar
-    e o vencedor da rodada, se houver'''
-    rodada = namedtuple('Rodada', ('czar', 'vencedor', 'recebida', 'finalizada'))
-    czar = vencedor = None
-    recebida = finalizada = False
+    '''lê a mensagem e a interpreta "o que está acontecendo", retornando uma 
+    namedtuple com as informações relevantes'''
     
     if mensagem[:36] == 'All answers received! The honourable':
-        # assumindo todas as pessoas têm primeiros-nomes distintos
-        czar = mensagem.split()[5]
-        recebida = True
+        dados = rodada(recebida=True, **parser_alternativas(mensagem))
+
     # as mensagens de resultado contêm texto bold, então são listas
     # e o nome do vencedor deve estar no primeiro elemento
-    elif 'wins a point!' in mensagem[0]:
-        # assumindo todas as pessoas têm primeiros-nomes distintos
-        vencedor = mensagem[0].split()[0]
-        finalizada = True
-    # caso a lista tenha sido desmantelada:
-    elif 'wins a point!' in mensagem:
-        # assumindo todas as pessoas têm primeiros-nomes distintos
-        vencedor = mensagem.split()[0]
-        finalizada = True
-    
-    return rodada(czar, vencedor, recebida, finalizada)
+    elif 'wins a point!' in mensagem[0] or 'wins a point!' in mensagem:
+        dados = rodada(finalizada=True, **parser_resultados(mensagem))
+    else:
+        dados = rodada()
+    return dados
         
-    
+
+def combina_dados(rodada1, rodada2):
+    atributos = []
+    for a, b in zip(rodada1, rodada2):
+        if (any((a,b)) and not all((a,b))) or a==b:
+            atributos.append(a or b)
+        else:
+            raise ValueError('rodadas têm elementos conflitantes!')
+    return rodada(*atributos)
+        
 
 def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
-    respondente; retorna um dicionário de czares'''
-    czares = {}
-    jogadores = [] # conjunto dos que mandaram ao menos uma carta ou foram czar
+    respondente; retorna um histórico dos czares e vencedores, e a lista dos
+    participantes'''
+    histórico = [] # lista de tuplas contendo (czar, vencedor) pra cada rodada
+    jogadores = [] # lista dos que mandaram ao menos uma carta ou foram czar
     for i, mensagem in enumerate(mensagens):
         rodada_A = parser(mensagem)
         if rodada_A.recebida:
@@ -76,17 +104,28 @@ def crawler(mensagens):
                 elif rodada_B.finalizada:
                     vencedor = rodada_B.vencedor
                     if vencedor == czar:
-                        print(f'Erro! Vencedor {vencedor} é o mesmo que o czar {czar}')
-                        print(f'Ganhou para pergunta número {i}: \n\n {mensagem}')
-                        print(f'Com a resposta de número {j} \n\n {resultado}')
+                        print(f'Erro! Vencedor {vencedor} é o mesmo que o czar {czar}\n'
+                              f'Ganhou para pergunta número {i}: \n\n {mensagem}\n\n\n\n'
+                              f'Com a resposta \n\n {resultado}')
+                        break
                     if vencedor not in jogadores:
                         jogadores.append(vencedor)
-                    if czar in czares:
-                        czares[czar].append(vencedor)
-                    else:
-                        czares[czar] = [vencedor]
+                    dados_rodada = combina_dados(rodada_A, rodada_B)
+                    histórico.append(dados_rodada)
                     break
+    return histórico, jogadores
 
+
+def conta(histórico, jogadores):
+    ''' retorna um dicionário de czares, contendo Counters com suas escolhas.
+    Czares que não escolheram estão nas keys do dicionário, mas jogadores que
+    não foram escolhidos não aparecem nos Counters'''
+    czares = dict()
+    for rodada in histórico:
+        escolhidos = czares.get(rodada.czar, [])
+        escolhidos.append(rodada.vencedor)
+        czares.setdefault(rodada.czar, escolhidos)
+        
     contagem_desordenada = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     não_czares = [jogador for jogador in jogadores if jogador not in czares]
     contagem_desordenada.update({não_czar: {} for não_czar in não_czares})
@@ -96,7 +135,7 @@ def crawler(mensagens):
                                   key=lambda x: list(contagem_desordenada).index(x[0])))
                 for czar, escolhas in contagem_desordenada.items()}
     return contagem
-
+    
 
 def plot_chances(contagem, normalizar=True):
     # remove czares que não jogaram e completa com zero jogadores faltantes em cada czar
@@ -142,9 +181,24 @@ def plot_heatmap(contagem, normalizar=True):
     heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
     plt.colorbar(heatmap)
     plt.show()
+<<<<<<< Updated upstream
     
     
 contagem = crawler(mensagens)
     
 plot_chances(contagem, normalizar=True)
 plot_heatmap(contagem, normalizar=True)
+=======
+
+
+def main():
+    histórico, jogadores = crawler(mensagens)
+    contagem = conta(histórico, jogadores)
+        
+    plot_chances(contagem, normalizar=True)
+    plot_heatmap(contagem, normalizar=True)
+
+
+if __name__=="__main__":
+    main()
+>>>>>>> Stashed changes
