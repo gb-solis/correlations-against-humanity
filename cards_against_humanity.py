@@ -216,6 +216,23 @@ def plot_histórico(histórico, jogadores):
     plt.show()
 
 
+# def plot_histórico_percent(histórico, jogadores):
+#     vitórias = {jogador: [1 if jogador==rodada.vencedor else 0 
+#                           for rodada in histórico] for jogador in jogadores}
+#     curvas = []
+#     for jogador, lista in vitórias.items():
+#         i = 0
+#         curva = [0] + [(i:=i+d) for d in lista]
+#         curvas.append(curva)
+#     pesos = [sum([curva[i] for curva in curvas]) for i in range(len(curvas[0]))]
+#     curvas = [[curva[i]/max(pesos[i],1) for i in range(len(curva))] for curva in curvas]
+#     plt.stackplot(range(len(curva)), curvas, labels=jogadores)
+#     plt.title('Histórico percentual de vitórias')
+#     plt.xlabel('Rodada')
+#     plt.ylabel('Vitórias (%)')
+#     plt.show()
+
+
 def main():
     jogo = jogos[-1]
     histórico, jogadores = crawler(jogo)
