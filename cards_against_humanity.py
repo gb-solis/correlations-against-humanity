@@ -181,14 +181,6 @@ def plot_heatmap(contagem, normalizar=True):
     heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
     plt.colorbar(heatmap)
     plt.show()
-<<<<<<< Updated upstream
-    
-    
-contagem = crawler(mensagens)
-    
-plot_chances(contagem, normalizar=True)
-plot_heatmap(contagem, normalizar=True)
-=======
 
 
 def main():
@@ -201,4 +193,3 @@ def main():
 
 if __name__=="__main__":
     main()
->>>>>>> Stashed changes
