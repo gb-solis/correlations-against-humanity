@@ -16,39 +16,32 @@ from scipy.interpolate import pchip_interpolate
 verbose = False
 
 # Print only if verbose is True
-def printv(str):
-    if verbose: print(str)
+def printv(*args, **kwargs):
+    if verbose: print(*args, **kwargs)
+
 
 # objeto que representa uma rodada
-rodada = namedtuple('Rodada',
-                    ('czar', 'vencedor', 'pergunta', 'resposta',
-                         'alternativas', 'recebida', 'finalizada'),
+Rodada = namedtuple('Rodada',
+                    ('czar', 'vencedor', 'pergunta', 'resposta', 'alternativas',
+                     'recebida', 'finalizada'),
                     defaults=(None, None, None, None, None, False, False))
 
 
 def abre_dados(path):
     with open(path, 'r', encoding='utf8') as file:
         dados = json.load(file)
-
-    mensagens_totais = [msg for msg in dados['messages'] if msg['type']=='message']
-
-    # queremos analisar correlações entre escolhas de pessoas
-    # essa informação está contida nas mensagens do bot; podemos descartar as restantes
-    mensagens = [msg['text'] for msg in mensagens_totais
-                 if msg['from']=='Chat Against Humanity']
-
-    # antes dessa mensagem, o jogo era só Gabriel, Artur e Leo; descartei
-    msg_inicial = 91
-    mensagens = mensagens[msg_inicial:]
-
-    # separar por jogos
+    # queremos analisar mensagens do bot
+    mensagens_bot = [msg['text'] for msg in dados['messages'] 
+                     if msg['type']=='message' 
+                     and msg['from']=='Chat Against Humanity']
+    # separar as mensagens em jogos
     jogos = [[]]
-    for msg in mensagens:
-        if 'is starting a new game of xyzzy!' in msg[0]: # msg de início contém texto formatado
+    for msg in mensagens_bot:
+        # msg de início contém texto formatado, então é uma lista
+        if 'is starting a new game of xyzzy!' in msg[0]:
             jogos.append([msg])
         else:
             jogos[-1].append(msg)
-
     return jogos
 
 
@@ -79,14 +72,12 @@ def parser(mensagem):
     namedtuple com as informações relevantes'''
 
     if mensagem[:36] == 'All answers received! The honourable':
-        dados = rodada(recebida=True, **parser_alternativas(mensagem))
-
+        dados = Rodada(recebida=True, **parser_alternativas(mensagem))
     # as mensagens de resultado contêm texto bold, então são listas
-    # e o nome do vencedor deve estar no primeiro elemento
     elif 'wins a point!' in mensagem[0] or 'wins a point!' in mensagem:
-        dados = rodada(finalizada=True, **parser_resultados(mensagem))
+        dados = Rodada(finalizada=True, **parser_resultados(mensagem))
     else:
-        dados = rodada()
+        dados = Rodada()
     return dados
 
 
@@ -98,7 +89,7 @@ def combina_dados(rodada1, rodada2):
             atributos.append(a or b)
         else:
             raise ValueError('rodadas têm elementos conflitantes!')
-    return rodada(*atributos)
+    return Rodada(*atributos)
 
 
 def crawler(mensagens):
@@ -120,9 +111,10 @@ def crawler(mensagens):
                 elif rodada_B.finalizada:
                     vencedor = rodada_B.vencedor
                     if vencedor == czar:
-                        printv(f'Erro! Vencedor {vencedor} é o mesmo que o czar {czar}\n'
-                              f'Ganhou para pergunta número {i}: \n\n {mensagem}\n\n\n\n'
-                              f'Com a resposta \n\n {resultado}')
+                        printv(f'Erro! Vencedor {vencedor} é também o czar\n'
+                                f'Ganhou para pergunta número {i}: \n\n'
+                                f'{mensagem}\n\n\n\n'
+                                f'Com a resposta \n\n {resultado}')
                         break
                     if vencedor not in jogadores:
                         jogadores.append(vencedor)
@@ -154,23 +146,42 @@ def conta(histórico, jogadores):
 
 
 class CAH:
-
     def __init__(self, jogo):
         self.jogo = jogo
         self.histórico, self.jogadores = crawler(jogo)
         self.contagem = conta(self.histórico, self.jogadores)
-
+    
+    
+    def __repr__(self):
+        return f'Jogo de {len(self.jogo)} rodadas, iniciado em dd/mm/yy, '\
+               f'entre {sorted(self.jogadores)}'
+               
+    
+    def não_vazio(método):
+        '''decorator pra evitar que rodemos funções em jogos vazios'''
+        def método_corrigido(self, *args, **kwargs):
+            if not self.histórico:
+                print(f'Jogo vazio! Não posso {método.__name__}. ({self})')
+                return
+            else:
+                return método(self, *args, **kwargs)
+        return método_corrigido
+            
+        
+    @não_vazio
     def plot_chances(self, normalizar=True):
-        # remove czares que não jogaram e completa com zero jogadores faltantes em cada czar
-        dados = {czar: {jog: self.contagem[czar].get(jog, 0) for jog in self.contagem if jog!=czar}
-                     for czar in self.contagem if self.contagem[czar]}
+        # remove czares que não jogaram e completa com zero jogadores faltantes
+        # em cada czar
+        dados = {czar: {jog: self.contagem[czar].get(jog, 0) 
+                        for jog in self.contagem if jog!=czar}
+                 for czar in self.contagem if self.contagem[czar]}
         if normalizar:
             for czar in dados:
                 N = max(1, sum(dados[czar].values()))
                 dados[czar] = {jog: val/N for jog, val in dados[czar].items()}
 
-        # plot "vazio", só para inicializar o primeiro nome no eixo x e garantir o
-        # bom-ordenamento
+        # plot "vazio", só para inicializar o primeiro nome no eixo x e 
+        # garantir o bom-ordenamento
         primeiro = list(dados.keys())[0]
         plt.plot([primeiro], [None], color='k')
 
@@ -185,10 +196,11 @@ class CAH:
         plt.legend(fontsize='x-small')
         plt.show()
 
-
-    # Faz um heat map 2D das escolhas que cada czar (eixo y) fez de cada jogador (eixo x)
+    @não_vazio
     # Tutorial usado: https://www.pythonpool.com/matplotlib-heatmap/
     def plot_heatmap(self, normalizar=True):
+        '''Faz um heat map 2D das escolhas que cada czar (eixo y) fez de cada 
+        jogador (eixo x)'''
         czares = [czar for czar in self.contagem.keys() if self.contagem[czar]]
         matriz_escolhas = [[self.contagem[czar].get(jog, 0) for jog in self.contagem]
                            for czar in czares]
@@ -201,7 +213,7 @@ class CAH:
         plt.title('Escolhas de cada czar' + normalizar*' (normalizadas)')
         plt.xlabel('Autor da resposta')
         plt.ylabel('Czar')
-
+        
         if normalizar:
             heatmap = plt.imshow(matriz_escolhas, cmap='Blues', interpolation='nearest')
             plt.colorbar(heatmap)
@@ -209,13 +221,14 @@ class CAH:
             n_max = max(max(i) for i in matriz_escolhas)
             cmap = plt.cm.get_cmap('Blues')#, n_max+1)
             heatmap = plt.imshow(matriz_escolhas, cmap=cmap, interpolation='nearest')
-            plt.colorbar(heatmap, format='%d',
-                         ticks=range(n_max+1))
+            plt.colorbar(heatmap, format='%d', ticks=range(n_max+1))
         plt.show()
 
-
+    
+    @não_vazio
     def plot_histórico(self, espalhar=True, suavizar=True):
         '''plota o histórico de pontos de cada jogador'''
+        
         deltaV = 0.07 # Valor mágico
         # Se temos n pontos de mesmo valor, espalhamos o valor para melhor visualização
         def espalhar_pontos(valor, n):
@@ -228,7 +241,8 @@ class CAH:
             return xsuave, ysuave
 
         vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
-                              for rodada in self.histórico] for jogador in self.jogadores}
+                              for rodada in self.histórico] 
+                    for jogador in self.jogadores}
         curvas = []
         for jogador, lista in vitórias.items():
             soma = 0
@@ -246,29 +260,19 @@ class CAH:
                 for valor in pontosDict:
                     inds = pontosDict[valor]
                     rodada[inds] = espalhar_pontos(valor, len(inds))
-
-        plt.plot(curvasTarr, '.', label=self.jogadores)
+        plt.plot(curvasTarr, '.')
         if suavizar:
             plt.plot(*suavizar(np.arange(0,len(curvasTarr)), curvasTarr), '-')
         else:
             plt.plot(curvasTarr, '-')
         plt.title('Histórico de pontos')
-        plt.legend(fontsize='x-small')
+        plt.legend(self.jogadores, fontsize='x-small')
         plt.xlabel('Rodada')
         plt.ylabel('Pontos')
         plt.show()
 
-
-    def plot_distribuição_pontos(self):
-        pontos_finais = Counter(rodada.vencedor for rodada in self.histórico)
-        jogadores, pontos = zip(*pontos_finais.most_common())
-        plt.plot(jogadores, pontos, 'o-')
-        plt.title('Distribuição final de pontos')
-        plt.ylabel('Pontos')
-        plt.xticks(rotation=45)
-        plt.show()
-
-
+    
+    @não_vazio
     def plot_histórico_percent(self):
         vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
                               for rodada in self.histórico] for jogador in self.jogadores}
@@ -285,7 +289,8 @@ class CAH:
         plt.ylabel('Vitórias (%)')
         plt.show()
 
-
+    
+    @não_vazio
     def plot_distribuição_pontos(self):
         pontos_finais = Counter(rodada.vencedor for rodada in self.histórico)
         jogadores, pontos = zip(*pontos_finais.most_common())
@@ -299,15 +304,16 @@ class CAH:
 def abre_CAHs(path):
     return list(map(lambda jogo: CAH(jogo), abre_dados(path)))
 
+
 def main():
     path = 'result.json'
 
     cahs = abre_CAHs(path)
-    último_cah = cahs[-1]
-
-    último_cah.plot_chances(normalizar=not True)
-    último_cah.plot_heatmap(normalizar=not True)
-    último_cah.plot_histórico()
+    último_cah = cahs[1]
+    
+    último_cah.plot_chances(normalizar=False)
+    último_cah.plot_heatmap(normalizar=False)
+    último_cah.plot_histórico(suavizar=False)
     último_cah.plot_distribuição_pontos()
 
 
