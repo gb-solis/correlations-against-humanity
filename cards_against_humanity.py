@@ -127,29 +127,35 @@ def crawler(mensagens):
     participantes'''
     histórico = [] # lista de tuplas contendo informações sobre cada rodada
     jogadores = [] # lista dos que mandaram ao menos uma carta ou foram czar
-    for i, mensagem in enumerate(mensagens):
-        rodada_A = parser(mensagem)
-        if rodada_A.recebida:
-            czar = rodada_A.czar
-            if czar not in jogadores:
-                jogadores.append(czar)
-            for j, resultado in enumerate(mensagens[i+1:]):
-                rodada_B = parser(resultado)
-                if rodada_B.recebida:
-                    break # chegamos ao início da próxima pergunta
-                elif rodada_B.finalizada:
-                    vencedor = rodada_B.vencedor
-                    if vencedor == czar:
-                        printv(f'Erro! Vencedor {vencedor} é também o czar\n'
-                                f'Ganhou para pergunta número {i}: \n\n'
-                                f'{mensagem}\n\n\n\n'
-                                f'Com a resposta \n\n {resultado}')
-                        break
-                    if vencedor not in jogadores:
-                        jogadores.append(vencedor)
-                    dados_rodada = combina_dados(rodada_A, rodada_B)
-                    histórico.append(dados_rodada)
-                    break
+    
+    rodada_A = rodada_B = None
+    altera_A = altera_B = None
+    
+    for mensagem in mensagens:
+        rodada = parser(mensagem)
+        # se é do tipo "all answers received!"
+        if rodada.recebida:
+            rodada_A = rodada
+        # se é do tipo "X wins a point!"
+        elif rodada.finalizada and rodada_A is not None:
+            rodada_B = rodada
+            czar, vencedor = rodada_A.czar, rodada_B.vencedor
+            if czar != vencedor:
+                dados_rodada = combina_dados(rodada_A, rodada_B)
+                histórico.append(dados_rodada)
+                jogadores.extend(jog for jog in (czar, vencedor) 
+                                 if jog not in jogadores)       
+                rodada_A = rodada_B = None
+            else:
+                printv(f'Erro! Vencedor {vencedor} é também o czar. Descartei')
+        # se está alterando os pontos de um jogador manualmente
+        elif rodada.altera_pontos:
+            if altera_A is None:
+                altera_A = rodada
+            else:
+                altera_B = rodada
+                altera_pontos(altera_A, altera_B, histórico)
+                altera_A = altera_B = None
     return histórico, jogadores
 
 
