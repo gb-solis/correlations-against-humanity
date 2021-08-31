@@ -47,12 +47,18 @@ def abre_dados(path):
 
 def parser_alternativas(mensagem):
     '''parser para mensagens do tipo "All answers received"'''
-    início, fim = mensagem.split('\n\n')
-    czar = início.split()[5]
-    pergunta = início.splitlines()[1][10:]
-    alternativas = fim.split('\n  - ')
-    alternativas[0] = alternativas[0][4:]
-    return {'czar': czar, 'pergunta': pergunta, 'alternativas': alternativas}
+    if isinstance(mensagem, str):
+        início, fim = mensagem.split('\n\n')
+        czar = início.split()[5]
+        pergunta = início.splitlines()[1][10:]
+        alternativas = fim.split('\n  - ')
+        alternativas[0] = alternativas[0][4:]
+        return {'czar': czar, 'pergunta': pergunta, 'alternativas': alternativas}
+    elif isinstance(mensagem, list):
+        czar = mensagem[0].split()[5]
+        pergunta = None # TODO
+        alternativas = None # TODO
+        return {'czar': czar}
 
 
 def parser_resultados(mensagem):
@@ -81,7 +87,8 @@ def parser(mensagem):
     '''lê a mensagem e a interpreta "o que está acontecendo", retornando uma
     namedtuple com as informações relevantes'''
 
-    if mensagem[:36] == 'All answers received! The honourable':
+    if mensagem[:36] == 'All answers received! The honourable' or \
+       mensagem[0][:36] == 'All answers received! The honourable':
         dados = Rodada(recebida=True, **parser_alternativas(mensagem))
     # as mensagens de resultado contêm texto bold, então são listas
     elif 'wins a point!' in mensagem[0] or 'wins a point!' in mensagem:
