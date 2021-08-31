@@ -23,8 +23,8 @@ def printv(*args, **kwargs):
 # objeto que representa uma rodada
 Rodada = namedtuple('Rodada',
                     ('czar', 'vencedor', 'pergunta', 'resposta', 'alternativas',
-                     'recebida', 'finalizada'),
-                    defaults=(None, None, None, None, None, False, False))
+                     'recebida', 'finalizada', 'altera_pontos'),
+                    defaults=(None, None, None, None, None, False, False, False))
 
 
 def abre_dados(path):
@@ -67,6 +67,16 @@ def parser_resultados(mensagem):
     return {'vencedor': vencedor, 'resposta': resposta}
 
 
+def parser_altera_pontos(mensagem):
+    '''parser para quando pontos de jogadores são manualmente alterados.
+    Altera os pontos do jogador'''
+    jogador = mensagem[0][len('Player  '):].split()[0]
+    pontos = int(mensagem[-1].split()[-1])
+    # guardar o nome em "vencedor" por falta de lugar melhor
+    return {'vencedor': jogador}
+    
+
+
 def parser(mensagem):
     '''lê a mensagem e a interpreta "o que está acontecendo", retornando uma
     namedtuple com as informações relevantes'''
@@ -76,6 +86,8 @@ def parser(mensagem):
     # as mensagens de resultado contêm texto bold, então são listas
     elif 'wins a point!' in mensagem[0] or 'wins a point!' in mensagem:
         dados = Rodada(finalizada=True, **parser_resultados(mensagem))
+    elif "'s score has been changed" in mensagem[2]:
+        dados = Rodada(altera_pontos=True, **parser_altera_pontos(mensagem))
     else:
         dados = Rodada()
     return dados
@@ -90,6 +102,23 @@ def combina_dados(rodada1, rodada2):
         else:
             raise ValueError('rodadas têm elementos conflitantes!')
     return Rodada(*atributos)
+
+
+def altera_pontos(altera_A, altera_B, histórico):
+    '''Altera os pontos dos jogadores A e B. Assume que apenas um ponto é
+    passado, daquele dentre os dois que por último venceu, para o outro.'''
+    if altera_A.vencedor == altera_B.vencedor:
+        printv(f'Pontos foram tirados de {altera_A.vencedor} duas vezes '
+                'seguidas, sem tirar de mais ninguém. Não sei lidar com isso ainda')
+    else:
+        for i, rodada in enumerate(reversed(histórico)):
+            candidatos = {altera_A.vencedor, altera_B.vencedor}
+            if rodada.vencedor in candidatos:
+                candidatos.remove(rodada.vencedor)
+                novo_vencedor = candidatos.pop()
+                rodada_corrigida = rodada._replace(vencedor=novo_vencedor)
+                break
+        histórico[-(i+1)] = rodada_corrigida
 
 
 def crawler(mensagens):
@@ -163,7 +192,6 @@ class CAH:
         return list(map(cls, abre_dados(path)))
     
     
-    
     def não_vazio(método):
         '''decorator pra evitar que rodemos funções em jogos vazios'''
         def método_corrigido(self, *args, **kwargs):
@@ -233,7 +261,7 @@ class CAH:
 
     
     @não_vazio
-    def plot_histórico(self, espalhar=True, suavizar=True):
+    def plot_histórico(self, espalhar=True, suavizar=True, mostra_pontos=False):
         '''plota o histórico de pontos de cada jogador'''
         
         deltaV = 0.07 # Valor mágico
@@ -267,7 +295,8 @@ class CAH:
                 for valor in pontosDict:
                     inds = pontosDict[valor]
                     rodada[inds] = espalhar_pontos(valor, len(inds))
-        plt.plot(curvasTarr, '.')
+        if mostra_pontos:
+            plt.plot(curvasTarr, '.')
         if suavizar:
             plt.plot(*suavizar(np.arange(0,len(curvasTarr)), curvasTarr), '-')
         else:
