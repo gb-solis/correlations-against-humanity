@@ -246,7 +246,7 @@ class CAH:
 
     @não_vazio
     # Tutorial usado: https://www.pythonpool.com/matplotlib-heatmap/
-    def plot_heatmap(self, normalizar=True):
+    def plot_heatmap(self, normalizar=True, salvar=False):
         '''Faz um heat map 2D das escolhas que cada czar (eixo y) fez de cada 
         jogador (eixo x)'''
         czares = [czar for czar in self.contagem.keys() if self.contagem[czar]]
@@ -270,11 +270,12 @@ class CAH:
             cmap = plt.cm.get_cmap('Blues')#, n_max+1)
             heatmap = plt.imshow(matriz_escolhas, cmap=cmap, interpolation='nearest')
             plt.colorbar(heatmap, format='%d', ticks=range(n_max+1))
+        if salvar: plt.savefig('heatmap.png', dpi=320, bbox_inches='tight')
         plt.show()
 
     
     @não_vazio
-    def plot_histórico(self, espalhar=True, suavizar=True, mostra_pontos=False):
+    def plot_histórico(self, espalhar=True, suavizar=True, mostrar_pontos=False, salvar=False):
         '''plota o histórico de pontos de cada jogador'''
         
         deltaV = 0.07 # Valor mágico
@@ -308,7 +309,7 @@ class CAH:
                 for valor in pontosDict:
                     inds = pontosDict[valor]
                     rodada[inds] = espalhar_pontos(valor, len(inds))
-        if mostra_pontos:
+        if mostrar_pontos:
             plt.plot(curvasTarr, '.')
         if suavizar:
             plt.plot(*suavizar(np.arange(0,len(curvasTarr)), curvasTarr), '-')
@@ -318,6 +319,7 @@ class CAH:
         plt.legend(self.jogadores, fontsize='x-small')
         plt.xlabel('Rodada')
         plt.ylabel('Pontos')
+        if salvar: plt.savefig('histórico de pontos.png', dpi=320)
         plt.show()
 
     
@@ -358,8 +360,8 @@ def main():
     último_cah = cahs[-1]
     
     último_cah.plot_chances(normalizar=False)
-    último_cah.plot_heatmap(normalizar=False)
-    último_cah.plot_histórico(suavizar=False)
+    último_cah.plot_heatmap(normalizar=False, salvar=False)
+    último_cah.plot_histórico(suavizar=False, salvar=False)
     último_cah.plot_distribuição_pontos()
 
 
