@@ -157,6 +157,13 @@ class CAH:
                f'entre {sorted(self.jogadores)}'
                
     
+    @classmethod
+    def from_json(cls, path):
+        '''ler jogos direto de arquivo localizado em path'''
+        return list(map(cls, abre_dados(path)))
+    
+    
+    
     def não_vazio(método):
         '''decorator pra evitar que rodemos funções em jogos vazios'''
         def método_corrigido(self, *args, **kwargs):
@@ -301,15 +308,12 @@ class CAH:
         plt.show()
 
 
-def abre_CAHs(path):
-    return list(map(lambda jogo: CAH(jogo), abre_dados(path)))
-
 
 def main():
     path = 'result.json'
 
-    cahs = abre_CAHs(path)
-    último_cah = cahs[1]
+    cahs = CAH.from_json(path)
+    último_cah = cahs[-1]
     
     último_cah.plot_chances(normalizar=False)
     último_cah.plot_heatmap(normalizar=False)
