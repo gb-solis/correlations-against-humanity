@@ -10,7 +10,14 @@
 import json
 from collections import Counter, namedtuple
 from matplotlib import pyplot as plt
+import numpy as np
+from scipy.interpolate import pchip_interpolate
 
+verbose = False
+
+# Print only if verbose is True
+def printv(str):
+    if verbose: print(str)
 
 # objeto que representa uma rodada
 rodada = namedtuple('Rodada',
@@ -98,7 +105,7 @@ def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
     respondente; retorna um histórico dos czares e vencedores, e a lista dos
     participantes'''
-    histórico = [] # lista de tuplas contendo (czar, vencedor) pra cada rodada
+    histórico = [] # lista de tuplas contendo informações sobre cada rodada
     jogadores = [] # lista dos que mandaram ao menos uma carta ou foram czar
     for i, mensagem in enumerate(mensagens):
         rodada_A = parser(mensagem)
@@ -113,7 +120,7 @@ def crawler(mensagens):
                 elif rodada_B.finalizada:
                     vencedor = rodada_B.vencedor
                     if vencedor == czar:
-                        print(f'Erro! Vencedor {vencedor} é o mesmo que o czar {czar}\n'
+                        printv(f'Erro! Vencedor {vencedor} é o mesmo que o czar {czar}\n'
                               f'Ganhou para pergunta número {i}: \n\n {mensagem}\n\n\n\n'
                               f'Com a resposta \n\n {resultado}')
                         break
@@ -207,18 +214,58 @@ class CAH:
         plt.show()
 
 
-    def plot_histórico(self):
+    def plot_histórico(self, espalhar=True, suavizar=True):
         '''plota o histórico de pontos de cada jogador'''
+        deltaV = 0.07 # Valor mágico
+        # Se temos n pontos de mesmo valor, espalhamos o valor para melhor visualização
+        def espalhar_pontos(valor, n):
+            return np.linspace(valor+(n-1)*deltaV/2, valor-(n-1)*deltaV/2, n)
+
+        # Interpolar dados com Bspline (300 pontos) em vez de linhas retas
+        def suavizar(x, y):
+            xsuave = np.linspace(x.min(), x.max(), len(x)*10)
+            ysuave= pchip_interpolate(x, y, xsuave)
+            return xsuave, ysuave
+
         vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
                               for rodada in self.histórico] for jogador in self.jogadores}
+        curvas = []
         for jogador, lista in vitórias.items():
-            i = 0
-            curva = [0] + [(i:=i+d) for d in lista]
-            plt.plot(curva, '.-', label=jogador)
+            soma = 0
+            curva = [0] + [(soma:=soma+venceu) for venceu in lista]
+            curvas.append(curva)
+        curvasTarr = np.transpose(np.array(curvas, dtype=float))
+        if espalhar:
+            for rodada in curvasTarr:
+                pontosDict = {}
+                for ind, ponto in enumerate(rodada):
+                    if ponto in pontosDict:
+                        pontosDict[ponto].append(ind)
+                    else:
+                        pontosDict[ponto] = [ind]
+                for valor in pontosDict:
+                    inds = pontosDict[valor]
+                    rodada[inds] = espalhar_pontos(valor, len(inds))
+
+        plt.plot(curvasTarr, '.', label=self.jogadores)
+        if suavizar:
+            plt.plot(*suavizar(np.arange(0,len(curvasTarr)), curvasTarr), '-')
+        else:
+            plt.plot(curvasTarr, '-')
         plt.title('Histórico de pontos')
         plt.legend(fontsize='x-small')
         plt.xlabel('Rodada')
         plt.ylabel('Pontos')
+        plt.show()
+
+
+    def plot_distribuição_pontos(self):
+        pontos_finais = Counter(rodada.vencedor for rodada in self.histórico)
+        jogadores, pontos = zip(*pontos_finais.most_common())
+        plt.plot(jogadores, pontos, 'o-')
+        plt.title('Distribuição final de pontos')
+        plt.ylabel('Pontos')
+        plt.xticks(rotation=45)
         plt.show()
 
 
@@ -227,12 +274,12 @@ class CAH:
                               for rodada in self.histórico] for jogador in self.jogadores}
         curvas = []
         for jogador, lista in vitórias.items():
-            i = 0
-            curva = [0] + [(i:=i+d) for d in lista]
+            soma = 0
+            curva = [0] + [(soma:=soma+venceu) for venceu in lista]
             curvas.append(curva)
         pesos = [sum([curva[i] for curva in curvas]) for i in range(len(curvas[0]))]
         curvas = [[curva[i]/max(pesos[i],1) for i in range(len(curva))] for curva in curvas]
-        plt.stackplot(range(len(curva)), curvas, labels=self.jogadores)
+        plt.stackplot(range(len(curva)), curvas, label=jogador)
         plt.title('Histórico percentual de vitórias')
         plt.xlabel('Rodada')
         plt.ylabel('Vitórias (%)')
@@ -261,9 +308,7 @@ def main():
     último_cah.plot_chances(normalizar=not True)
     último_cah.plot_heatmap(normalizar=not True)
     último_cah.plot_histórico()
-
-    for cah in cahs:
-        cah.plot_distribuição_pontos()
+    último_cah.plot_distribuição_pontos()
 
 
 if __name__=="__main__":
