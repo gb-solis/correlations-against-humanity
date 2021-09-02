@@ -12,6 +12,7 @@ from collections import Counter, namedtuple
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.interpolate import pchip_interpolate
+from datetime import datetime
 
 verbose = False
 
@@ -20,25 +21,81 @@ def printv(*args, **kwargs):
     if verbose: print(*args, **kwargs)
 
 
+# @dataclass
+class Rodada:
+    def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
+                 alternativas=None, altera_pontos=None, data_recebida=None, 
+                 hora_recebida=None, data_finalizada=None, hora_finalizada=None):
+                 
+        self.czar = czar
+        self.vencedor = vencedor
+        self.pergunta = pergunta
+        self.resposta = resposta
+        self.alternativas = alternativas
+        self.altera_pontos = altera_pontos
+        self.data_recebida = data_recebida
+        self.hora_recebida = hora_recebida
+        self.data_finalizada = data_finalizada
+        self.hora_finalizada = hora_finalizada
+        # self.recebida = False
+        # self.finalizada = False
+    
+    @property
+    def recebida(self):
+        return bool(self.czar)
+    @property
+    def finalizada(self):
+        return bool(self.vencedor)
+    @classmethod
+    def from_dict(cls, dict_):
+        return parser(dict_)
+    
+    def __repr__(self):
+        czar, vencedor = self.czar, self.vencedor
+        pergunta, resposta = self.pergunta, self.resposta
+        return f'Rodada({czar=}, {vencedor=}, {pergunta=}, {resposta=})'
+    
+    def __iter__(self):
+        for valor in self.__dict__.values():
+            yield valor
+    
+    def __add__(self, outro):
+        args = []
+        for a,b in zip(self, outro):
+            if not all((a,b)) or a==b:
+                args.append(a or b)
+            else:
+                raise ValueError('Rodadas têm elementos conflitantes')
+        return Rodada(*args)
+        
+    def copy(self):
+        return Rodada(*self)
+    
+    def replace(self, **kwargs):
+        novos_kw = {**self.__dict__, **kwargs}
+        return Rodada(**novos_kw)
+    
+
+
 # objeto que representa uma rodada
-Rodada = namedtuple('Rodada',
-                    ('czar', 'vencedor', 'pergunta', 'resposta', 'alternativas',
-                     'recebida', 'finalizada', 'altera_pontos'),
-                    defaults=(None, None, None, None, None, False, False, False))
+# Rodada = namedtuple('Rodada',
+#                     ('czar', 'vencedor', 'pergunta', 'resposta', 'alternativas',
+#                      'recebida', 'finalizada', 'altera_pontos'),
+#                     defaults=(None, None, None, None, None, False, False, False))
 
 
 def abre_dados(path):
     with open(path, 'r', encoding='utf8') as file:
         dados = json.load(file)
     # queremos analisar mensagens do bot
-    mensagens_bot = [msg['text'] for msg in dados['messages'] 
+    mensagens_bot = [msg for msg in dados['messages'] 
                      if msg['type']=='message' 
                      and msg['from']=='Chat Against Humanity']
     # separar as mensagens em jogos
     jogos = [[]]
     for msg in mensagens_bot:
         # msg de início contém texto formatado, então é uma lista
-        if 'is starting a new game of xyzzy!' in msg[0]:
+        if 'is starting a new game of xyzzy!' in msg['text'][0]:
             jogos.append([msg])
         else:
             jogos[-1].append(msg)
@@ -78,26 +135,33 @@ def parser_altera_pontos(mensagem):
     Altera os pontos do jogador'''
     jogador = mensagem[0][len('Player  '):].split()[0]
     pontos = int(mensagem[-1].split()[-1])
-    # guardar o nome em "vencedor" por falta de lugar melhor
-    return {'vencedor': jogador}
+    # guardar o nome em "altera_pontos"
+    return {'altera_pontos': jogador}
     
-
 
 def parser(mensagem):
     '''lê a mensagem e a interpreta "o que está acontecendo", retornando uma
-    namedtuple com as informações relevantes'''
-
-    if mensagem[:36] == 'All answers received! The honourable' or \
-       mensagem[0][:36] == 'All answers received! The honourable':
-        dados = Rodada(recebida=True, **parser_alternativas(mensagem))
+    Rodada com as informações relevantes'''
+    
+    texto = mensagem['text']
+    datahora = datetime.fromisoformat(mensagem['date'])
+    data, hora = datahora.date(), datahora.time()
+    
+    if texto[:36] == 'All answers received! The honourable' or \
+       texto[0][:36] == 'All answers received! The honourable':
+        dados = parser_alternativas(texto)
+        metadados = {'data_recebida': data, 'hora_recebida': hora}
     # as mensagens de resultado contêm texto bold, então são listas
-    elif 'wins a point!' in mensagem[0] or 'wins a point!' in mensagem:
-        dados = Rodada(finalizada=True, **parser_resultados(mensagem))
-    elif "'s score has been changed" in mensagem[2]:
-        dados = Rodada(altera_pontos=True, **parser_altera_pontos(mensagem))
+    elif 'wins a point!' in texto[0] or 'wins a point!' in texto:
+        dados = parser_resultados(texto)
+        metadados = {'data_finalizada': data, 'hora_finalizada': hora}
+    elif "'s score has been changed" in texto[2]:
+        dados = parser_altera_pontos(texto)
+        metadados = dict()
     else:
-        dados = Rodada()
-    return dados
+        dados = metadados = dict()
+        
+    return Rodada(**dados, **metadados)
 
 
 def combina_dados(rodada1, rodada2):
@@ -114,16 +178,16 @@ def combina_dados(rodada1, rodada2):
 def altera_pontos(altera_A, altera_B, histórico):
     '''Altera os pontos dos jogadores A e B. Assume que apenas um ponto é
     passado, daquele dentre os dois que por último venceu, para o outro.'''
-    if altera_A.vencedor == altera_B.vencedor:
-        printv(f'Pontos foram tirados de {altera_A.vencedor} duas vezes '
+    if altera_A.altera_pontos == altera_B.altera_pontos:
+        printv(f'Pontos foram alterados de {altera_A.altera_pontos} duas vezes '
                 'seguidas, sem tirar de mais ninguém. Não sei lidar com isso ainda')
     else:
         for i, rodada in enumerate(reversed(histórico)):
-            candidatos = {altera_A.vencedor, altera_B.vencedor}
+            candidatos = {altera_A.altera_pontos, altera_B.altera_pontos}
             if rodada.vencedor in candidatos:
                 candidatos.remove(rodada.vencedor)
                 novo_vencedor = candidatos.pop()
-                rodada_corrigida = rodada._replace(vencedor=novo_vencedor)
+                rodada_corrigida = rodada.replace(vencedor=novo_vencedor)
                 break
         histórico[-(i+1)] = rodada_corrigida
 
@@ -148,7 +212,8 @@ def crawler(mensagens):
             rodada_B = rodada
             czar, vencedor = rodada_A.czar, rodada_B.vencedor
             if czar != vencedor:
-                dados_rodada = combina_dados(rodada_A, rodada_B)
+                # dados_rodada = combina_dados(rodada_A, rodada_B)
+                dados_rodada = rodada_A + rodada_B
                 histórico.append(dados_rodada)
                 jogadores.extend(jog for jog in (czar, vencedor) 
                                  if jog not in jogadores)       
@@ -198,6 +263,12 @@ class CAH:
         return f'Jogo de {len(self.jogo)} rodadas, iniciado em dd/mm/yy, '\
                f'entre {sorted(self.jogadores)}'
                
+               
+    def __add__(self, outro):
+        jogo = self.jogo.copy()
+        jogo.extend(outro.jogo)
+        return CAH(jogo)
+               
     
     @classmethod
     def from_json(cls, path):
@@ -243,6 +314,7 @@ class CAH:
         plt.xticks(rotation=45)
         plt.legend(fontsize='x-small')
         plt.show()
+
 
     @não_vazio
     # Tutorial usado: https://www.pythonpool.com/matplotlib-heatmap/
@@ -358,6 +430,8 @@ def main():
 
     cahs = CAH.from_json(path)
     último_cah = cahs[-1]
+    # todos = sum(cahs, start=CAH([]))
+    
     
     último_cah.plot_chances(normalizar=False)
     último_cah.plot_heatmap(normalizar=False, salvar=False)
