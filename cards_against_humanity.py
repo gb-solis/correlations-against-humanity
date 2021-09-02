@@ -424,6 +424,38 @@ class CAH:
         plt.show()
 
 
+    @não_vazio
+    def horários(self, tipo='respostas'):
+        if tipo in self.jogadores:
+            horas = [rodada.hora_finalizada.hour for rodada in self.histórico 
+                     if rodada.czar==tipo]
+        elif tipo=='respostas':
+            horas = [rodada.hora_recebida.hour for rodada in self.histórico]
+        elif tipo=='czares':
+            horas = [rodada.hora_finalizada.hour for rodada in self.histórico]
+        elif tipo=='grupo':
+            horas = [rodada.hora_recebida.hour for rodada in self.histórico] \
+                    + [rodada.hora_finalizada.hour for rodada in self.histórico]
+        else:
+            raise ValueError('Esse não é um nome ou categoria válido')
+        
+        barras, _ = np.histogram(horas, bins=24, range=(0,24), density=True)
+        
+        plt.subplot(projection='polar')
+        cmap = plt.get_cmap('inferno')
+        cores = [cmap((i/11)) for i in range(12)] \
+                + [cmap(1.1-i/10) for i in range(1,13)]
+        
+        plt.bar([-np.pi/2 - np.pi/12*i for i in range(1,25)], height=barras, 
+                width=0.9*(np.pi/12), bottom=0.05, align='edge', color=cores)
+        plt.title(f'Atividade de {tipo}')
+        plt.xticks([np.pi/6 + np.pi/3*i for i in range(6)],
+                   labels=['16:00', '12:00', '8:00', '4:00', '0:00', '20:00'])
+        plt.yticks(np.linspace(0.05, 0.05+max(barras), 5), labels=[])
+        plt.grid(alpha=0.2)
+        plt.show()
+
+
 
 def main():
     path = 'result.json'
@@ -437,6 +469,7 @@ def main():
     último_cah.plot_heatmap(normalizar=False, salvar=False)
     último_cah.plot_histórico(suavizar=False, salvar=False)
     último_cah.plot_distribuição_pontos()
+    último_cah.horários('grupo')
 
 
 if __name__=="__main__":
