@@ -21,7 +21,24 @@ def printv(*args, **kwargs):
     if verbose: print(*args, **kwargs)
 
 
-# @dataclass
+def abre_dados(path):
+    with open(path, 'r', encoding='utf8') as file:
+        dados = json.load(file)
+    # queremos analisar mensagens do bot
+    mensagens_bot = [msg for msg in dados['messages'] 
+                     if msg['type']=='message' 
+                     and msg['from']=='Chat Against Humanity']
+    # separar as mensagens em jogos
+    jogos = [[]]
+    for msg in mensagens_bot:
+        # msg de início contém texto formatado, então é uma lista
+        if 'is starting a new game of xyzzy!' in msg['text'][0]:
+            jogos.append([msg])
+        else:
+            jogos[-1].append(msg)
+    return jogos
+
+
 class Rodada:
     def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
                  alternativas=None, altera_pontos=None, data_recebida=None, 
@@ -42,10 +59,12 @@ class Rodada:
     
     @property
     def recebida(self):
-        return bool(self.czar)
+        return bool(self.data_recebida)
+    
     @property
     def finalizada(self):
-        return bool(self.vencedor)
+        return bool(self.data_finalizada)
+    
     @classmethod
     def from_dict(cls, dict_):
         return parser(dict_)
@@ -74,32 +93,6 @@ class Rodada:
     def replace(self, **kwargs):
         novos_kw = {**self.__dict__, **kwargs}
         return Rodada(**novos_kw)
-    
-
-
-# objeto que representa uma rodada
-# Rodada = namedtuple('Rodada',
-#                     ('czar', 'vencedor', 'pergunta', 'resposta', 'alternativas',
-#                      'recebida', 'finalizada', 'altera_pontos'),
-#                     defaults=(None, None, None, None, None, False, False, False))
-
-
-def abre_dados(path):
-    with open(path, 'r', encoding='utf8') as file:
-        dados = json.load(file)
-    # queremos analisar mensagens do bot
-    mensagens_bot = [msg for msg in dados['messages'] 
-                     if msg['type']=='message' 
-                     and msg['from']=='Chat Against Humanity']
-    # separar as mensagens em jogos
-    jogos = [[]]
-    for msg in mensagens_bot:
-        # msg de início contém texto formatado, então é uma lista
-        if 'is starting a new game of xyzzy!' in msg['text'][0]:
-            jogos.append([msg])
-        else:
-            jogos[-1].append(msg)
-    return jogos
 
 
 def parser_alternativas(mensagem):
@@ -163,16 +156,6 @@ def parser(mensagem):
         
     return Rodada(**dados, **metadados)
 
-
-def combina_dados(rodada1, rodada2):
-    '''combina os dados de duas namedtuples, dando erro se forem inconsistentes'''
-    atributos = []
-    for a, b in zip(rodada1, rodada2):
-        if (any((a,b)) and not all((a,b))) or a==b:
-            atributos.append(a or b)
-        else:
-            raise ValueError('rodadas têm elementos conflitantes!')
-    return Rodada(*atributos)
 
 
 def altera_pontos(altera_A, altera_B, histórico):
