@@ -42,7 +42,7 @@ def abre_dados(path):
 class Rodada:
     def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
                  alternativas=None, altera_pontos=None, data_recebida=None, 
-                 hora_recebida=None, data_finalizada=None, hora_finalizada=None):
+                 data_finalizada=None):
                  
         self.czar = czar
         self.vencedor = vencedor
@@ -51,9 +51,7 @@ class Rodada:
         self.alternativas = alternativas
         self.altera_pontos = altera_pontos
         self.data_recebida = data_recebida
-        self.hora_recebida = hora_recebida
         self.data_finalizada = data_finalizada
-        self.hora_finalizada = hora_finalizada
         # self.recebida = False
         # self.finalizada = False
     
@@ -137,17 +135,16 @@ def parser(mensagem):
     Rodada com as informações relevantes'''
     
     texto = mensagem['text']
-    datahora = datetime.fromisoformat(mensagem['date'])
-    data, hora = datahora.date(), datahora.time()
+    data = datetime.fromisoformat(mensagem['date'])
     
     if texto[:36] == 'All answers received! The honourable' or \
        texto[0][:36] == 'All answers received! The honourable':
         dados = parser_alternativas(texto)
-        metadados = {'data_recebida': data, 'hora_recebida': hora}
+        metadados = {'data_recebida': data}
     # as mensagens de resultado contêm texto bold, então são listas
     elif 'wins a point!' in texto[0] or 'wins a point!' in texto:
         dados = parser_resultados(texto)
-        metadados = {'data_finalizada': data, 'hora_finalizada': hora}
+        metadados = {'data_finalizada': data}
     elif "'s score has been changed" in texto[2]:
         dados = parser_altera_pontos(texto)
         metadados = dict()
@@ -410,15 +407,15 @@ class CAH:
     @não_vazio
     def horários(self, tipo='respostas'):
         if tipo in self.jogadores:
-            horas = [rodada.hora_finalizada.hour for rodada in self.histórico 
+            horas = [rodada.data_finalizada.hour for rodada in self.histórico 
                      if rodada.czar==tipo]
         elif tipo=='respostas':
-            horas = [rodada.hora_recebida.hour for rodada in self.histórico]
+            horas = [rodada.data_recebida.hour for rodada in self.histórico]
         elif tipo=='czares':
-            horas = [rodada.hora_finalizada.hour for rodada in self.histórico]
+            horas = [rodada.data_finalizada.hour for rodada in self.histórico]
         elif tipo=='grupo':
-            horas = [rodada.hora_recebida.hour for rodada in self.histórico] \
-                    + [rodada.hora_finalizada.hour for rodada in self.histórico]
+            horas = [rodada.data_recebida.hour for rodada in self.histórico] \
+                    + [rodada.data_finalizada.hour for rodada in self.histórico]
         else:
             raise ValueError('Esse não é um nome ou categoria válido')
         
@@ -439,13 +436,46 @@ class CAH:
         plt.show()
 
 
+    def demora(self):
+        from matplotlib.colors import LogNorm
+        czar2num = dict(zip(self.jogadores, range(len(self.jogadores))))
+        tempos = []
+        czares = []
+        for rodada in self.histórico:
+            delta = rodada.data_finalizada - rodada.data_recebida
+            delta = delta.seconds/3600
+            if delta > 12:
+                print(rodada)
+            num = czar2num[rodada.czar]
+            tempos.append(delta)
+            czares.append(num)
+        
+        cores = plt.get_cmap('plasma')
+        hist = plt.hist2d(czares, tempos, bins=(10, 13), cmin=1, cmap=cores,
+                   range=((0,10),(0,13)), norm=LogNorm())
+        plt.colorbar(hist[3])
+        plt.title('Tempo de escolha por czar')
+        plt.ylabel('Tempo até escolher (horas)')
+        plt.xticks(range(10), labels='', rotation=45)
+        
+        
+        ax = plt.gca()
+        # Customize minor tick labels
+        ax.set_xticks([i+0.5 for i in range(10)], minor=True)
+        ax.set_xticklabels(self.jogadores, minor=True, rotation=45)
+        
+        for tick in ax.xaxis.get_minor_ticks():
+            tick.tick1line.set_markersize(0)
+            tick.tick2line.set_markersize(0)
+        plt.show()
 
+    
 def main():
     path = 'result.json'
 
     cahs = CAH.from_json(path)
     último_cah = cahs[-1]
-    # todos = sum(cahs, start=CAH([]))
+    todos = sum(cahs, start=CAH([]))
     
     
     último_cah.plot_chances(normalizar=False)
@@ -453,6 +483,7 @@ def main():
     último_cah.plot_histórico(suavizar=False, salvar=False)
     último_cah.plot_distribuição_pontos()
     último_cah.horários('grupo')
+    último_cah.demora()
 
 
 if __name__=="__main__":
