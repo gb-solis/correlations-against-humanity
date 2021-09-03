@@ -8,7 +8,7 @@
 # =============================================================================
 
 import json
-from collections import Counter, namedtuple
+from collections import Counter
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.interpolate import pchip_interpolate
@@ -232,7 +232,7 @@ def conta(histórico, jogadores):
     return contagem
 
 
-class CAH:
+class Partida:
     def __init__(self, jogo):
         self.jogo = jogo
         self.histórico, self.jogadores = crawler(jogo)
@@ -247,7 +247,7 @@ class CAH:
     def __add__(self, outro):
         jogo = self.jogo.copy()
         jogo.extend(outro.jogo)
-        return CAH(jogo)
+        return Partida(jogo)
                
     
     @classmethod
@@ -473,10 +473,9 @@ class CAH:
 def main():
     path = 'result.json'
 
-    cahs = CAH.from_json(path)
+    cahs = Partida.from_json(path)
     último_cah = cahs[-1]
-    todos = sum(cahs, start=CAH([]))
-    
+    todos = sum(cahs, start=Partida([]))
     
     último_cah.plot_chances(normalizar=False)
     último_cah.plot_heatmap(normalizar=False, salvar=False)
@@ -484,7 +483,7 @@ def main():
     último_cah.plot_distribuição_pontos()
     último_cah.horários('grupo')
     último_cah.demora()
-
+    
 
 if __name__=="__main__":
     main()
