@@ -12,7 +12,8 @@ from collections import Counter
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.interpolate import pchip_interpolate
-from datetime import datetime
+
+from classes import Mensagem, AlteraPonto, Recebida, Finalizada, Rodada
 
 verbose = False
 
@@ -37,97 +38,6 @@ def abre_dados(path):
         else:
             jogos[-1].append(msg)
     return jogos
-
-
-class Rodada:
-    def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
-                 alternativas=None, altera_pontos=None, data_recebida=None, 
-                 data_finalizada=None):
-                 
-        self.czar = czar
-        self.vencedor = vencedor
-        self.pergunta = pergunta
-        self.resposta = resposta
-        self.alternativas = alternativas
-        self.altera_pontos = altera_pontos
-        self.data_recebida = data_recebida
-        self.data_finalizada = data_finalizada
-        # self.recebida = False
-        # self.finalizada = False
-    
-    @property
-    def recebida(self):
-        return bool(self.data_recebida)
-    
-    @property
-    def finalizada(self):
-        return bool(self.data_finalizada)
-    
-    @classmethod
-    def from_dict(cls, dict_):
-        return parser(dict_)
-    
-    def __repr__(self):
-        czar, vencedor = self.czar, self.vencedor
-        pergunta, resposta = self.pergunta, self.resposta
-        return f'Rodada({czar=}, {vencedor=}, {pergunta=}, {resposta=})'
-    
-    def __iter__(self):
-        for valor in self.__dict__.values():
-            yield valor
-    
-    def __add__(self, outro):
-        args = []
-        for a,b in zip(self, outro):
-            if not all((a,b)) or a==b:
-                args.append(a or b)
-            else:
-                raise ValueError('Rodadas têm elementos conflitantes')
-        return Rodada(*args)
-        
-    def copy(self):
-        return Rodada(*self)
-    
-    def replace(self, **kwargs):
-        novos_kw = {**self.__dict__, **kwargs}
-        return Rodada(**novos_kw)
-
-
-def parser_alternativas(mensagem):
-    '''parser para mensagens do tipo "All answers received"'''
-    if isinstance(mensagem, str):
-        início, fim = mensagem.split('\n\n')
-        czar = início.split()[5]
-        pergunta = início.splitlines()[1][10:]
-        alternativas = fim.split('\n  - ')
-        alternativas[0] = alternativas[0][4:]
-        return {'czar': czar, 'pergunta': pergunta, 'alternativas': alternativas}
-    elif isinstance(mensagem, list):
-        czar = mensagem[0].split()[5]
-        pergunta = None # TODO
-        alternativas = None # TODO
-        return {'czar': czar}
-
-
-def parser_resultados(mensagem):
-    ''' parser para mensagens do tipo "x wins a point!" '''
-    if isinstance(mensagem, str):
-        linhas = mensagem.splitlines()
-        vencedor = linhas[0].rstrip(' wins a point!')
-        resposta = linhas[1] # TODO: copia a resposta + enunciado! resolver
-    elif isinstance(mensagem, list):
-        vencedor = mensagem[0].split()[0]
-        resposta = mensagem[1]['text']
-    return {'vencedor': vencedor, 'resposta': resposta}
-
-
-def parser_altera_pontos(mensagem):
-    '''parser para quando pontos de jogadores são manualmente alterados.
-    Altera os pontos do jogador'''
-    jogador = mensagem[0][len('Player  '):].split()[0]
-    pontos = int(mensagem[-1].split()[-1])
-    # guardar o nome em "altera_pontos"
-    return {'altera_pontos': jogador}
     
 
 def parser(mensagem):
@@ -135,41 +45,37 @@ def parser(mensagem):
     Rodada com as informações relevantes'''
     
     texto = mensagem['text']
-    data = datetime.fromisoformat(mensagem['date'])
     
     if texto[:36] == 'All answers received! The honourable' or \
     texto[0][:36] == 'All answers received! The honourable':
-        dados = parser_alternativas(texto)
-        metadados = {'data_recebida': data}
-    # as mensagens de resultado contêm texto bold, então são listas
+        evento = Recebida.from_dict(mensagem)
     elif 'wins a point!' in texto[0] or 'wins a point!' in texto:
-        dados = parser_resultados(texto)
-        metadados = {'data_finalizada': data}
+        evento = Finalizada.from_dict(mensagem)
     elif "'s score has been changed" in texto[2]:
-        dados = parser_altera_pontos(texto)
-        metadados = dict()
+        evento = AlteraPonto.from_dict(mensagem)
     else:
-        dados = metadados = dict()
-        
-    return Rodada(**dados, **metadados)
+        evento = Mensagem.from_dict(mensagem)
 
+    return evento
 
 
 def altera_pontos(altera_A, altera_B, histórico):
     '''Altera os pontos dos jogadores A e B. Assume que apenas um ponto é
     passado, daquele dentre os dois que por último venceu, para o outro.'''
-    if altera_A.altera_pontos == altera_B.altera_pontos:
-        printv(f'Pontos foram alterados de {altera_A.altera_pontos} duas vezes '
+    # if altera_A.altera_pontos == altera_B.altera_pontos:
+    if altera_A.jogador == altera_B.jogador:
+        printv(f'Pontos foram alterados de {altera_A.jogador} duas vezes '
                 'seguidas, sem tirar de mais ninguém. Não sei lidar com isso ainda')
     else:
         for i, rodada in enumerate(reversed(histórico)):
-            candidatos = {altera_A.altera_pontos, altera_B.altera_pontos}
+            candidatos = {altera_A.jogador, altera_B.jogador}
             if rodada.vencedor in candidatos:
                 candidatos.remove(rodada.vencedor)
                 novo_vencedor = candidatos.pop()
-                rodada_corrigida = rodada.replace(vencedor=novo_vencedor)
+                # rodada_corrigida = rodada.replace(vencedor=novo_vencedor)
+                rodada.vencedor = novo_vencedor
                 break
-        histórico[-(i+1)] = rodada_corrigida
+        # histórico[-(i+1)] = rodada_corrigida
 
 
 def crawler(mensagens):
@@ -183,29 +89,31 @@ def crawler(mensagens):
     altera_A = altera_B = None
     
     for mensagem in mensagens:
-        rodada = parser(mensagem)
+        evento = parser(mensagem)
         # se é do tipo "all answers received!"
-        if rodada.recebida:
-            rodada_A = rodada
+        if isinstance(evento, Recebida):
+        # if rodada.recebida:
+            rodada_A = evento
         # se é do tipo "X wins a point!"
-        elif rodada.finalizada and rodada_A is not None:
-            rodada_B = rodada
+        # elif rodada.finalizada and rodada_A is not None:
+        elif isinstance(evento, Finalizada) and rodada_A is not None: 
+            rodada_B = evento
             czar, vencedor = rodada_A.czar, rodada_B.vencedor
             if czar != vencedor:
                 # dados_rodada = combina_dados(rodada_A, rodada_B)
-                dados_rodada = rodada_A + rodada_B
-                histórico.append(dados_rodada)
+                rodada = Rodada.from_pair(rodada_A, rodada_B)
+                histórico.append(rodada)
                 jogadores.extend(jog for jog in (czar, vencedor) 
                                  if jog not in jogadores)       
                 rodada_A = rodada_B = None
             else:
                 printv(f'Erro! Vencedor {vencedor} é também o czar. Descartei')
         # se está alterando os pontos de um jogador manualmente
-        elif rodada.altera_pontos:
+        elif isinstance(evento, AlteraPonto):
             if altera_A is None:
-                altera_A = rodada
+                altera_A = evento
             else:
-                altera_B = rodada
+                altera_B = evento
                 altera_pontos(altera_A, altera_B, histórico)
                 altera_A = altera_B = None
     return histórico, jogadores
@@ -224,7 +132,7 @@ def conta(histórico, jogadores):
     contagem_desordenada = {czar: Counter(escolhas) for czar, escolhas in czares.items()}
     não_czares = [jogador for jogador in jogadores if jogador not in czares]
     contagem_desordenada.update({não_czar: {} for não_czar in não_czares})
-
+        
     # ordenaremos a contagem_desordenada
     contagem = {czar: dict(sorted(escolhas.items(),
                                   key=lambda x: list(contagem_desordenada).index(x[0])))
@@ -237,7 +145,6 @@ class Partida:
         self.jogo = jogo
         self.histórico, self.jogadores = crawler(jogo)
         self.contagem = conta(self.histórico, self.jogadores)
-    
     
     def __repr__(self):
         return f'Jogo de {len(self.jogo)} rodadas, iniciado em dd/mm/yy, '\
@@ -444,8 +351,6 @@ class Partida:
         for rodada in self.histórico:
             delta = rodada.data_finalizada - rodada.data_recebida
             delta = delta.seconds/3600
-            if delta > 12:
-                print(rodada)
             num = czar2num[rodada.czar]
             tempos.append(delta)
             czares.append(num)
