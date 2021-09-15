@@ -114,7 +114,7 @@ def parser_resultados(mensagem):
     if isinstance(mensagem, str):
         linhas = mensagem.splitlines()
         vencedor = linhas[0].rstrip(' wins a point!')
-        resposta = linhas[1] # copia a resposta + enunciado! TODO: resolver
+        resposta = linhas[1] # TODO: copia a resposta + enunciado! resolver
     elif isinstance(mensagem, list):
         vencedor = mensagem[0].split()[0]
         resposta = mensagem[1]['text']
@@ -138,7 +138,7 @@ def parser(mensagem):
     data = datetime.fromisoformat(mensagem['date'])
     
     if texto[:36] == 'All answers received! The honourable' or \
-       texto[0][:36] == 'All answers received! The honourable':
+    texto[0][:36] == 'All answers received! The honourable':
         dados = parser_alternativas(texto)
         metadados = {'data_recebida': data}
     # as mensagens de resultado contêm texto bold, então são listas
@@ -296,8 +296,8 @@ class Partida:
         plt.show()
 
 
-    @não_vazio
     # Tutorial usado: https://www.pythonpool.com/matplotlib-heatmap/
+    @não_vazio
     def plot_heatmap(self, normalizar=True, salvar=False):
         '''Faz um heat map 2D das escolhas que cada czar (eixo y) fez de cada 
         jogador (eixo x)'''
@@ -405,7 +405,7 @@ class Partida:
 
 
     @não_vazio
-    def horários(self, tipo='respostas'):
+    def horários(self, tipo='grupo'):
         if tipo in self.jogadores:
             horas = [rodada.data_finalizada.hour for rodada in self.histórico 
                      if rodada.czar==tipo]
@@ -452,7 +452,7 @@ class Partida:
         
         cores = plt.get_cmap('plasma')
         hist = plt.hist2d(czares, tempos, bins=(10, 13), cmin=1, cmap=cores,
-                   range=((0,10),(0,13)), norm=LogNorm())
+                          range=((0,10),(0,13)), norm=LogNorm())
         plt.colorbar(hist[3])
         plt.title('Tempo de escolha por czar')
         plt.ylabel('Tempo até escolher (horas)')
@@ -473,16 +473,18 @@ class Partida:
 def main():
     path = 'result.json'
 
-    cahs = Partida.from_json(path)
-    último_cah = cahs[-1]
-    todos = sum(cahs, start=Partida([]))
+    partidas = Partida.from_json(path)
+    última = partidas[-1]
+    todas = sum(partidas[4:], start=Partida([]))
     
-    último_cah.plot_chances(normalizar=False)
-    último_cah.plot_heatmap(normalizar=False, salvar=False)
-    último_cah.plot_histórico(suavizar=False, salvar=False)
-    último_cah.plot_distribuição_pontos()
-    último_cah.horários('grupo')
-    último_cah.demora()
+    cah = última
+    
+    # cah.plot_chances(normalizar=False)
+    cah.plot_heatmap(normalizar=False, salvar=False)
+    cah.plot_histórico(suavizar=False, salvar=False)
+    cah.plot_distribuição_pontos()
+    cah.horários()
+    cah.demora()
     
 
 if __name__=="__main__":
