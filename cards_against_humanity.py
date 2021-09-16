@@ -259,8 +259,11 @@ class Partida:
             if normalizar:
                 jogou = [1 if jogador in rodada.jogadores #and jogador not in rodada.chumps
                          else 0 for rodada in self.histórico]
+                pesos = [len(rod.jogadores) for rod in self.histórico]
+                curva = list(accumulate([i*p for i,p in zip(lista, pesos)], initial=1))
                 n_jogos = list(accumulate(jogou, initial=0))
                 curva = [vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
+                curva = [2*i/(i+1)-1 for i in curva]
             curvas.append(curva)
         curvasTarr = np.transpose(np.array(curvas, dtype=float))
         if espalhar:
@@ -283,7 +286,7 @@ class Partida:
         plt.title('Histórico de pontos' + normalizar*' (normalizado)')
         plt.legend(self.jogadores, fontsize='x-small')
         plt.xlabel('Rodada')
-        plt.ylabel('Pontos' if not normalizar else 'razão vitórias/rodadas')
+        plt.ylabel('Pontos' if not normalizar else 'coeficiente de vitórias')
         if salvar: plt.savefig('histórico de pontos.png', dpi=320)
         plt.show()
 
@@ -371,7 +374,7 @@ def main():
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
     
-    cah = sum(partidas[-2:], start=Partida([]))
+    cah = sum(partidas[4:], start=Partida([]))
     
     # cah.plot_chances(normalizar=False)
     # cah.plot_heatmap(normalizar=False, salvar=False)
