@@ -257,11 +257,17 @@ class Partida:
         for jogador, lista in vitórias.items():
             curva = list(accumulate(lista, initial=0))
             if normalizar:
-                jogou = [1 if (jogador in (rodada.jogadores or []) and not jogador in (rodada.chumps or [])) else 0
+                jogou = [1 if (jogador in rodada.jogadores and jogador not in rodada.chumps) else 0
                          for rodada in self.histórico]
                 n_jogos = list(accumulate(jogou, initial=0))
+                print(jogador)
+                print(jogou)
+                # print(curva)
                 curva = [vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
+                # print(curva)
+                print()
             curvas.append(curva)
+        print(repr(self.histórico[-3].texto_recebida))
         curvasTarr = np.transpose(np.array(curvas, dtype=float))
         if espalhar:
             for rodada in curvasTarr:
@@ -286,24 +292,6 @@ class Partida:
         plt.ylabel('Pontos' if not normalizar else 'razão vitórias/rodadas')
         if salvar: plt.savefig('histórico de pontos.png', dpi=320)
         plt.show()
-
-    
-    # @não_vazio
-    # def plot_histórico_percent(self):
-    #     vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
-    #                           for rodada in self.histórico] for jogador in self.jogadores}
-    #     curvas = []
-    #     for jogador, lista in vitórias.items():
-    #         soma = 0
-    #         curva = [0] + [(soma:=soma+venceu) for venceu in lista]
-    #         curvas.append(curva)
-    #     pesos = [sum([curva[i] for curva in curvas]) for i in range(len(curvas[0]))]
-    #     curvas = [[curva[i]/max(pesos[i],1) for i in range(len(curva))] for curva in curvas]
-    #     plt.stackplot(range(len(curva)), curvas, label=jogador)
-    #     plt.title('Histórico percentual de vitórias')
-    #     plt.xlabel('Rodada')
-    #     plt.ylabel('Vitórias (%)')
-    #     plt.show()
 
     
     @não_vazio
@@ -389,7 +377,7 @@ def main():
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
     
-    cah = todas
+    cah = sum(partidas[-1:], start=Partida([]))
     
     # cah.plot_chances(normalizar=False)
     # cah.plot_heatmap(normalizar=False, salvar=False)

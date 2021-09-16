@@ -61,6 +61,7 @@ class Recebida(Mensagem):
             dados = match.groupdict()
             dados['czar'] = dados['czar'].strip()
             dados['alternativas'] = dados['alternativas'].split('\n  - ')[1:]
+            dados['chumps'] = dados['chumps'] or {}
             return dados
         elif isinstance(mensagem, list):
             texto = ''.join(txt if isinstance(txt, str) else txt['text'] 
@@ -91,23 +92,23 @@ class Finalizada(Mensagem):
             match = re.match('(?P<vencedor>.+) wins a point!\n', mensagem)
         dados = match.groupdict()
         dados['vencedor'] = dados['vencedor'].strip()
+        jogadores = [msg.split(' - ') for msg in mensagem[-1].split('\n')[1:]]
+        jogadores = {j[0].strip(): j[1].rstrip(' points.') for j in jogadores}
         try:
             resposta = mensagem[1]['text']
-            jogadores = [msg.split(' - ') for msg in mensagem[2].split('\n')[1:]]
-            jogadores = {j[0].strip(): j[1].rstrip(' points.') for j in jogadores}
             return {'resposta': resposta, 'jogadores': jogadores, **dados}
         except:
-            # print(mensagem)
-            # raise Exception('B'*80)
-            return {'resposta': None, 'jogadores': None, **dados}
+            # caso em que resposta está contida em vários dicionários
+            resposta = None
+        return {'resposta': resposta, 'jogadores': jogadores, **dados}
         
                
 
 class Rodada(Recebida, Finalizada):
     def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
                  alternativas=None, data_recebida=None, data_finalizada=None, 
-                 texto_recebida=None, texto_finalizada=None, id_recebida=None, id_finalizada=None, chumps=None,
-                 jogadores=None):
+                 texto_recebida=None, texto_finalizada=None, id_recebida=None, 
+                 id_finalizada=None, chumps=None, jogadores=None):
                  
         self.czar = czar
         self.vencedor = vencedor
