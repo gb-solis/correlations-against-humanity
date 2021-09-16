@@ -257,8 +257,8 @@ class Partida:
         for jogador, lista in vitórias.items():
             curva = list(accumulate(lista, initial=0))
             if normalizar:
-                jogou = [1 if (jogador in rodada.jogadores and jogador not in rodada.chumps) else 0
-                         for rodada in self.histórico]
+                jogou = [1 if jogador in rodada.jogadores #and jogador not in rodada.chumps
+                         else 0 for rodada in self.histórico]
                 n_jogos = list(accumulate(jogou, initial=0))
                 curva = [vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
             curvas.append(curva)
@@ -371,7 +371,7 @@ def main():
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
     
-    cah = sum(partidas[-1:], start=Partida([]))
+    cah = sum(partidas[-2:], start=Partida([]))
     
     # cah.plot_chances(normalizar=False)
     # cah.plot_heatmap(normalizar=False, salvar=False)
