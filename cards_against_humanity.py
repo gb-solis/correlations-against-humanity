@@ -249,6 +249,29 @@ class Partida:
             xsuave = np.linspace(x.min(), x.max(), len(x)*10)
             ysuave= pchip_interpolate(x, y, xsuave)
             return xsuave, ysuave
+        
+        def bokeh_plot(dados, salvar=False, mostrar=True):
+            from bokeh.plotting import figure, output_file, save
+            from bokeh.io import show
+            from bokeh.palettes import Spectral11
+            from bokeh.models import HoverTool
+            cor = Spectral11
+            X = dados[0]
+            p = figure(width=1000, height=700, title='Métrica de Humor')
+            p.xaxis.axis_label = 'Rodada'
+            p.yaxis.axis_label = 'Índice de graça'
+            plot = p.multi_line([X]*10, list(dados[1].transpose()),
+                         line_width=3,
+                         line_color=cor,
+                         name='oi',
+                         tags=list(range(10)),
+                         hover_line_color='black')
+            p.add_tools(HoverTool(tooltips=None, renderers=[plot]))
+            if salvar:
+                output_file('pontos.html')
+                save(p)
+            if mostrar:
+                show(p)
 
         vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
                               for rodada in self.histórico] 
@@ -280,7 +303,10 @@ class Partida:
         if mostrar_pontos:
             plt.plot(curvasTarr, '.')
         if suavizar:
-            plt.plot(*suavizar(np.arange(0,len(curvasTarr)), curvasTarr), '-')
+            dados = suavizar(np.arange(0,len(curvasTarr)), curvasTarr)
+            plt.plot(*dados, '-')
+            bokeh_plot(dados)
+            
         else:
             plt.plot(curvasTarr, '-')
         plt.title('Histórico de pontos' + normalizar*' (normalizado)')
