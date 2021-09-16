@@ -86,18 +86,20 @@ class Finalizada(Mensagem):
         # if not isinstance(mensagem, list):
         #     print('\n\n mensagem não é lista? Erro!\n\n')
         #     return
+        match = re.match('(?P<vencedor>.+) wins a point!\n', mensagem[0])
+        if match is None:
+            match = re.match('(?P<vencedor>.+) wins a point!\n', mensagem)
+        dados = match.groupdict()
+        dados['vencedor'] = dados['vencedor'].strip()
         try:
-            match = re.match('(?P<vencedor>.+) wins a point!\n', mensagem[0])
             resposta = mensagem[1]['text']
             jogadores = [msg.split(' - ') for msg in mensagem[2].split('\n')[1:]]
             jogadores = {j[0].strip(): j[1].rstrip(' points.') for j in jogadores}
-            dados = match.groupdict()
-            dados['vencedor'] = dados['vencedor'].strip()
             return {'resposta': resposta, 'jogadores': jogadores, **dados}
         except:
             # print(mensagem)
             # raise Exception('B'*80)
-            return {'resposta': None, 'jogadores': None, 'vencedor': None}
+            return {'resposta': None, 'jogadores': None, **dados}
         
                
 
