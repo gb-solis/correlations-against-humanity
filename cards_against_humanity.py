@@ -12,6 +12,7 @@ from collections import Counter
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.interpolate import pchip_interpolate
+from itertools import accumulate
 
 from classes import Mensagem, AlteraPonto, Recebida, Finalizada, Rodada
 
@@ -234,10 +235,11 @@ class Partida:
 
     
     @não_vazio
-    def plot_histórico(self, espalhar=True, suavizar=True, mostrar_pontos=False, salvar=False):
+    def plot_histórico(self, espalhar=True, suavizar=True, mostrar_pontos=False,
+                       salvar=False, normalizar=False):
         '''plota o histórico de pontos de cada jogador'''
         
-        deltaV = 0.07 # Valor mágico
+        deltaV = 0.07 if not normalizar else 0.01# Valor mágico
         # Se temos n pontos de mesmo valor, espalhamos o valor para melhor visualização
         def espalhar_pontos(valor, n):
             return np.linspace(valor+(n-1)*deltaV/2, valor-(n-1)*deltaV/2, n)
@@ -253,8 +255,12 @@ class Partida:
                     for jogador in self.jogadores}
         curvas = []
         for jogador, lista in vitórias.items():
-            soma = 0
-            curva = [0] + [(soma:=soma+venceu) for venceu in lista]
+            curva = list(accumulate(lista, initial=0))
+            if normalizar:
+                jogou = [1 if (jogador in (rodada.jogadores or []) and not jogador in (rodada.chumps or [])) else 0
+                         for rodada in self.histórico]
+                n_jogos = list(accumulate(jogou, initial=0))
+                curva = [vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
             curvas.append(curva)
         curvasTarr = np.transpose(np.array(curvas, dtype=float))
         if espalhar:
@@ -274,30 +280,30 @@ class Partida:
             plt.plot(*suavizar(np.arange(0,len(curvasTarr)), curvasTarr), '-')
         else:
             plt.plot(curvasTarr, '-')
-        plt.title('Histórico de pontos')
+        plt.title('Histórico de pontos' + normalizar*' (normalizado)')
         plt.legend(self.jogadores, fontsize='x-small')
         plt.xlabel('Rodada')
-        plt.ylabel('Pontos')
+        plt.ylabel('Pontos' if not normalizar else 'razão vitórias/rodadas')
         if salvar: plt.savefig('histórico de pontos.png', dpi=320)
         plt.show()
 
     
-    @não_vazio
-    def plot_histórico_percent(self):
-        vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
-                              for rodada in self.histórico] for jogador in self.jogadores}
-        curvas = []
-        for jogador, lista in vitórias.items():
-            soma = 0
-            curva = [0] + [(soma:=soma+venceu) for venceu in lista]
-            curvas.append(curva)
-        pesos = [sum([curva[i] for curva in curvas]) for i in range(len(curvas[0]))]
-        curvas = [[curva[i]/max(pesos[i],1) for i in range(len(curva))] for curva in curvas]
-        plt.stackplot(range(len(curva)), curvas, label=jogador)
-        plt.title('Histórico percentual de vitórias')
-        plt.xlabel('Rodada')
-        plt.ylabel('Vitórias (%)')
-        plt.show()
+    # @não_vazio
+    # def plot_histórico_percent(self):
+    #     vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
+    #                           for rodada in self.histórico] for jogador in self.jogadores}
+    #     curvas = []
+    #     for jogador, lista in vitórias.items():
+    #         soma = 0
+    #         curva = [0] + [(soma:=soma+venceu) for venceu in lista]
+    #         curvas.append(curva)
+    #     pesos = [sum([curva[i] for curva in curvas]) for i in range(len(curvas[0]))]
+    #     curvas = [[curva[i]/max(pesos[i],1) for i in range(len(curva))] for curva in curvas]
+    #     plt.stackplot(range(len(curva)), curvas, label=jogador)
+    #     plt.title('Histórico percentual de vitórias')
+    #     plt.xlabel('Rodada')
+    #     plt.ylabel('Vitórias (%)')
+    #     plt.show()
 
     
     @não_vazio
@@ -342,7 +348,8 @@ class Partida:
         plt.grid(alpha=0.2)
         plt.show()
 
-
+    
+    @não_vazio
     def demora(self):
         from matplotlib.colors import LogNorm
         czar2num = dict(zip(self.jogadores, range(len(self.jogadores))))
@@ -382,14 +389,15 @@ def main():
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
     
-    cah = última
+    cah = todas
     
     # cah.plot_chances(normalizar=False)
-    cah.plot_heatmap(normalizar=False, salvar=False)
-    cah.plot_histórico(suavizar=False, salvar=False)
-    cah.plot_distribuição_pontos()
-    cah.horários()
-    cah.demora()
+    # cah.plot_heatmap(normalizar=False, salvar=False)
+    # cah.plot_histórico(suavizar=False, salvar=False)
+    # cah.plot_distribuição_pontos()
+    # cah.horários()
+    # cah.demora()
+    cah.plot_histórico(normalizar=True)
     
 
 if __name__=="__main__":
