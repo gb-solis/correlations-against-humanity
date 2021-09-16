@@ -260,14 +260,8 @@ class Partida:
                 jogou = [1 if (jogador in rodada.jogadores and jogador not in rodada.chumps) else 0
                          for rodada in self.histórico]
                 n_jogos = list(accumulate(jogou, initial=0))
-                print(jogador)
-                print(jogou)
-                # print(curva)
                 curva = [vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
-                # print(curva)
-                print()
             curvas.append(curva)
-        print(repr(self.histórico[-3].texto_recebida))
         curvasTarr = np.transpose(np.array(curvas, dtype=float))
         if espalhar:
             for rodada in curvasTarr:

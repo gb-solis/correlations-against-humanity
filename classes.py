@@ -55,7 +55,7 @@ class Recebida(Mensagem):
             match = re.match(r'All answers received! The honourable '
                              r'(?P<czar>.*) presiding.\nQuestion: '
                              r'(?P<pergunta>.*)\n'
-                             r'(?P<alternativas>(?:\n.*)*)'
+                             r'(?P<alternativas>(?:\n  - .*)*)'
                              r'(?:\nSkipped these chumps: \n - '
                              r'(?P<chumps>.*))?', mensagem)
             dados = match.groupdict()
