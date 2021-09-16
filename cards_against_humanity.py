@@ -236,7 +236,7 @@ class Partida:
     
     @não_vazio
     def plot_histórico(self, espalhar=True, suavizar=True, mostrar_pontos=False,
-                       salvar=False, normalizar=False):
+                       salvar=False, normalizar=False, bokeh=False):
         '''plota o histórico de pontos de cada jogador'''
         
         deltaV = 0.07 if not normalizar else 0.01# Valor mágico
@@ -245,7 +245,7 @@ class Partida:
             return np.linspace(valor+(n-1)*deltaV/2, valor-(n-1)*deltaV/2, n)
 
         # Interpolar dados com Bspline (300 pontos) em vez de linhas retas
-        def suavizar(x, y):
+        def suaviza(x, y):
             xsuave = np.linspace(x.min(), x.max(), len(x)*10)
             ysuave= pchip_interpolate(x, y, xsuave)
             return xsuave, ysuave
@@ -253,20 +253,29 @@ class Partida:
         def bokeh_plot(dados, salvar=False, mostrar=True):
             from bokeh.plotting import figure, output_file, save
             from bokeh.io import show
-            from bokeh.palettes import Spectral11
+            from bokeh.palettes import Spectral10 as cor
             from bokeh.models import HoverTool
-            cor = Spectral11
             X = dados[0]
             p = figure(width=1000, height=700, title='Métrica de Humor')
             p.xaxis.axis_label = 'Rodada'
-            p.yaxis.axis_label = 'Índice de graça'
-            plot = p.multi_line([X]*10, list(dados[1].transpose()),
-                         line_width=3,
-                         line_color=cor,
-                         name='oi',
-                         tags=list(range(10)),
-                         hover_line_color='black')
-            p.add_tools(HoverTool(tooltips=None, renderers=[plot]))
+            p.yaxis.axis_label = 'Índice comédia'
+            
+            for n, Y in enumerate(dados[1].transpose()):
+                plot = p.line(X, Y, 
+                              line_width=2.5,
+                              line_color=cor[n],
+                              name=self.jogadores[n],
+                              legend_label=self.jogadores[n])
+            p.add_tools(HoverTool(tooltips='$name',))
+            
+            p.multi_line([X]*10, list(dados[1].transpose()),
+                          line_width=2.5,
+                          line_color=cor,
+                          nonselection_alpha=0.2,
+                          hover_line_color='black',
+                          hover_line_width=4)
+            p.legend.location = "bottom_left"
+            p.legend.click_policy="hide"
             if salvar:
                 output_file('pontos.html')
                 save(p)
@@ -280,12 +289,17 @@ class Partida:
         for jogador, lista in vitórias.items():
             curva = list(accumulate(lista, initial=0))
             if normalizar:
-                jogou = [1 if jogador in rodada.jogadores #and jogador not in rodada.chumps
+                jogou = [0] + [1 if jogador in rodada.jogadores #and jogador not in rodada.chumps
                          else 0 for rodada in self.histórico]
                 pesos = [len(rod.jogadores) for rod in self.histórico]
-                curva = list(accumulate([i*p for i,p in zip(lista, pesos)], initial=1))
-                n_jogos = list(accumulate(jogou, initial=0))
-                curva = [vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
+                curva = list(accumulate([i*p for i,p in zip(lista, pesos)], initial=0))
+                n_jogos = list(accumulate(jogou))
+                print(jogador)
+                print(jogou, len(jogou))
+                print(curva,len(curva))
+                print(n_jogos, len(n_jogos))
+                print()
+                curva = [1 if (vit, jog)==(0,0) else vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
                 curva = [2*i/(i+1)-1 for i in curva]
             curvas.append(curva)
         curvasTarr = np.transpose(np.array(curvas, dtype=float))
@@ -303,12 +317,13 @@ class Partida:
         if mostrar_pontos:
             plt.plot(curvasTarr, '.')
         if suavizar:
-            dados = suavizar(np.arange(0,len(curvasTarr)), curvasTarr)
+            dados = suaviza(np.arange(0,len(curvasTarr)), curvasTarr)
             plt.plot(*dados, '-')
-            bokeh_plot(dados)
+            if bokeh: bokeh_plot(dados)
             
         else:
             plt.plot(curvasTarr, '-')
+            if bokeh: bokeh_plot(curvasTarr)
         plt.title('Histórico de pontos' + normalizar*' (normalizado)')
         plt.legend(self.jogadores, fontsize='x-small')
         plt.xlabel('Rodada')
@@ -400,7 +415,7 @@ def main():
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
     
-    cah = sum(partidas[4:], start=Partida([]))
+    cah = sum(partidas[-1:], start=Partida([]))
     
     # cah.plot_chances(normalizar=False)
     # cah.plot_heatmap(normalizar=False, salvar=False)
@@ -408,7 +423,7 @@ def main():
     # cah.plot_distribuição_pontos()
     # cah.horários()
     # cah.demora()
-    cah.plot_histórico(normalizar=True)
+    cah.plot_histórico(normalizar=True, espalhar=False, bokeh=True)
     
 
 if __name__=="__main__":
