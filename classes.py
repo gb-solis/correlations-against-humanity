@@ -25,6 +25,7 @@ class AlteraPonto(Mensagem):
     # de Mensagem usem o método .from_dict sem mudanças adicionais.
     def __post_init__(self):
         self.jogador, self.pontos = self.parser().values()
+        self.delta = None
         
     def __str__(self):
         return super().__str__() + '\n'\
@@ -103,6 +104,93 @@ class Finalizada(Mensagem):
         return {'resposta': resposta, 'jogadores': jogadores, **dados}
         
                
+@dataclass        
+class PerdePonto(Mensagem):
+    def __post_init__(self):
+        self.czar = self.parser()['czar']
+    
+    def __str__(self):
+        return super().__str__() + '\n' + \
+        f'{self.czar} moscou e perdeu um ponto'
+    
+    def parser(self):
+        mensagem = self.texto
+        dados = re.match('Judge was too slow,  (?P<czar>.*) \(', mensagem[0])
+        return dados.groupdict()
+
+@dataclass
+class HurryUp(Mensagem):
+    def __post_init__(self):
+        self.atrasados = self.parser()
+    
+    def __str__(self):
+        return super().__str__() + '\n' + \
+        f'{", ".join(self.atrasados)} precisam responder!'
+        
+    def parser(self):
+        mensagem = self.texto
+        if isinstance(mensagem, list):
+            nomes = [i.strip(' ()') for i in mensagem[:-1] if isinstance(i,str)]
+            nomes = sum((i.split(', ') for i in nomes), start=[])
+            nomes = [i.strip() for i in nomes]
+            return nomes
+        elif isinstance(mensagem, str):
+            nomes = mensagem[:-len('needs to hurry up! Tick-tock...')] # pode ser need se plural
+            return [nomes]
+        
+@dataclass
+class Atraso(Mensagem):
+    def __post_init__(self):
+        self.atrasados = self.parser()
+        
+    def __str__(self):
+        return super().__str__() + '\n' + \
+        f'{", ".join(self.atrasados)} atrasaram' 
+      
+    def parser(self):
+        return [''] # TODO
+
+
+@dataclass
+class HurryJudge(Mensagem):
+    def __post_init__(self):
+        self.atrasado = self.parser()
+        
+    def __str__(self):
+        return super().__str__() + '\n' + \
+        f'o juiz {self.atrasado} está atrasado' 
+        
+    def parser(self):
+        return self.texto # todo
+
+
+@dataclass
+class Entrou(Mensagem):
+    def __post_init__(self):
+        self.jogador = self.parser()
+    
+    def __str__(self):
+        return super().__str__() + '\n' + \
+        f'{self.jogador} entrou no jogo'
+      
+    def parser(self):
+        nome = self.texto[:-len(' has joined the game')]
+        return nome.strip()
+    
+@dataclass
+class Início(Mensagem):
+    def __post_init__(self):
+        self.jogador = self.parser()
+    
+    def __str__(self):
+        return super().__str__() + '\n' + \
+        f'{self.jogador} iniciou o jogo'
+
+    def parser(self):
+        nome = self.texto[0][:-len(' is starting a new game of xyzzy! Type ')]
+        return nome.strip()
+
+
 
 class Rodada(Recebida, Finalizada):
     def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
@@ -123,10 +211,15 @@ class Rodada(Recebida, Finalizada):
         self.id_finalizada = id_finalizada
         self.chumps = chumps
         self.jogadores = jogadores
+        self.participantes = set(self.jogadores).difference(set(self.chumps))
+        # self.texto = 'Rodada do czar {self.czar} perguntando {self.pergunta}, vencida por {self.vencedor}'
         
+    def __repr__(self):
+        return f'Rodada(czar={self.czar}, pergunta={self.pergunta}, vencedor={self.vencedor})'
+    
     @classmethod
     def from_pair(cls, recebida, finalizada):
-        assert isinstance(recebida, Recebida), 'primeiro argumento não é Recebida'
+        assert isinstance(recebida, Recebida), f'primeiro argumento não é Recebida, é {recebida!r}\n Segundo é {finalizada!r}'
         assert isinstance(finalizada, Finalizada), 'segundo argumento não é Finalizada'
         dic_rec = {a:b for a,b in recebida.__dict__.items() if a not in ('data', 'id_', 'texto')}
         dic_fin = {a:b for a,b in finalizada.__dict__.items() if a not in ('data', 'id_', 'texto')}
