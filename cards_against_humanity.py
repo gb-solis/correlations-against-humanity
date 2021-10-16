@@ -24,8 +24,8 @@ TODO: transição para objetos
         [X] contar pontos absolutos pré-mudança
         [X] contabilizar mudanças de ponto em um só jogo
         [/] transformar em deltas 
-        [ ] combinar mudanças de pontos entre jogos
-        [ ] lidar com mudanças múltiplas seguidas
+        [X] combinar mudanças de pontos entre jogos
+        [/] lidar com mudanças múltiplas seguidas
         
     [ ] estabelecer vencedores por rodada
         [ ] adicionar vencedores extra?
@@ -40,6 +40,7 @@ TODO: transição para objetos
 import json
 from collections import Counter
 from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 from scipy.interpolate import pchip_interpolate
 from itertools import accumulate
@@ -80,7 +81,6 @@ def formata_nomes(nomes, tipo='formal'):
         else:
             if tipo=='formal': return f'{partes[0][0]}. {partes[-1]}'
             elif tipo=='informal': return partes[0]
-    
     return list(map(formata, nomes))
 
 
@@ -117,6 +117,7 @@ def parser(mensagem):
     return evento.from_dict(mensagem)
 
 
+# deprecado?
 def altera_pontos(altera_A, altera_B, histórico):
     '''Altera os pontos dos jogadores A e B. Assume que apenas um ponto é
     passado, daquele dentre os dois que por último venceu, para o outro.'''
@@ -136,6 +137,7 @@ def altera_pontos(altera_A, altera_B, histórico):
         # histórico[-(i+1)] = rodada_corrigida
 
 
+# deprecado?
 def crawler(mensagens):
     '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
     respondente; retorna um histórico dos czares e vencedores, e a lista dos
@@ -202,39 +204,6 @@ def crawler2(mensagens):
     return ata, jogadores
 
 
-def pontuação(ata, jogadores):
-    dados = dict.fromkeys(jogadores, [0])
-    # pts_início = dict.fromkeys(jogadores, 0)
-    for evento in ata:
-        if isinstance(evento, Início):
-            pts_início = {jog: val[-1] for jog, val in dados.items()}
-        if isinstance(evento, Rodada):
-            dados = {jogador: pontos + [(pontos[-1] or 0)]
-                     for jogador, pontos in dados.items()}
-            dados[evento.vencedor][-1] += 1
-        if isinstance(evento, AlteraPonto):
-            pontos_atuais = dados[evento.jogador][-1] - pts_início[evento.jogador]
-            delta_pontos = evento.pontos - pontos_atuais
-            evento.delta = delta_pontos
-            dados[evento.jogador][-1] += delta_pontos
-        if isinstance(evento, PerdePonto):
-            # dados = {jog: pts + [(pts[-1] or 0)] for jog, pts in dados.items()}
-            dados[evento.czar][-1] -= 1
-    return {jogador: pontos for jogador, pontos in dados.items()}
-
-
-def vitórias(pontos):
-    def diff_segura(a,b):
-        if a is None and b is None:
-            return None
-        elif None in (a,b):
-            return a or b
-        else:
-            return a - b
-    vits = {jog: [diff_segura(pts[i], pts[i-1]) for i in range(1,len(pts))] 
-            for jog, pts in pontos.items()}
-    return vits
-        
 
 def conta(histórico, jogadores):
     ''' retorna um dicionário de czares, contendo Counters com suas escolhas.
@@ -261,7 +230,6 @@ class Partida:
     def __init__(self, jogo):
         self.jogo = jogo
         self.ata, self.jogadores = crawler2(jogo)
-        self.pontuação = pontuação(self.ata, self.jogadores)
         self.histórico = [rod for rod in self.ata if isinstance(rod, Rodada)]
         self.contagem = conta(self.histórico, self.jogadores)
     
@@ -288,7 +256,48 @@ class Partida:
             else:
                 return método(self, *args, **kwargs)
         return método_corrigido
-            
+    
+    
+    def pontuação(self):
+        ata = self.ata
+        jogadores = self.jogadores
+        dados = dict.fromkeys(jogadores, [0])
+        # pts_início = dict.fromkeys(jogadores, 0)
+        for evento in ata:
+            if isinstance(evento, Início):
+                pts_início = {jog: val[-1] for jog, val in dados.items()}
+            if isinstance(evento, Rodada):
+                dados = {jogador: pontos + [(pontos[-1] or 0)]
+                         for jogador, pontos in dados.items()}
+                dados[evento.vencedor][-1] += 1
+            if isinstance(evento, AlteraPonto):
+                pontos_atuais = dados[evento.jogador][-1] - pts_início[evento.jogador]
+                delta_pontos = evento.pontos - pontos_atuais
+                evento.delta = delta_pontos
+                dados[evento.jogador][-1] += delta_pontos
+            if isinstance(evento, PerdePonto):
+                # dados = {jog: pts + [(pts[-1] or 0)] for jog, pts in dados.items()}
+                dados[evento.czar][-1] -= 1
+        return {jogador: pontos for jogador, pontos in dados.items()}
+    
+    
+    def vitórias(self):
+        pontos = self.pontuação()
+        def diff_segura(a,b):
+            if a is None and b is None:
+                return None
+            elif None in (a,b):
+                return a or b
+            else:
+                return a - b
+        vits = {jog: [diff_segura(pts[i], pts[i-1]) for i in range(1,len(pts))] 
+                for jog, pts in pontos.items()}
+        return vits    
+    
+    
+    
+    
+    
     @não_vazio
     def plot_chances(self, normalizar=True):
         # remove czares que não jogaram e completa com zero jogadores faltantes
@@ -349,9 +358,45 @@ class Partida:
         plt.show()
     
     
-    def matriz_preferências(self):
-        pass
+    def matrizes_preferências(self):
+        n = len(self.jogadores)
+        brutos = []
+        preferências = []
+        n_escolhas_czar = np.zeros((n,))
+        n_jogos_jogador = np.zeros((n,))
+        matriz = np.zeros((n,n))
+        for i, rodada in enumerate(self.histórico):
+            N = len(rodada.jogadores)
+            i_czar = self.jogadores.index(rodada.czar)
+            n_escolhas_czar[i_czar] += 1
+            for jogador, vitórias in self.vitórias().items():
+                i_jog = self.jogadores.index(jogador)
+                n_jogos_jogador[i_jog] += 1
+                vit = vitórias[i]
+                matriz[i_czar][i_jog] += N*vit
+            brutos.append(matriz.copy())
+            matriz_peso = matriz.copy()
+            matriz_peso = np.divide(matriz_peso, np.maximum(n_escolhas_czar,1)[np.newaxis].T)
+            matriz_peso = np.divide(matriz_peso, np.maximum(n_jogos_jogador, 1))
+            preferências.append(matriz_peso)
+        return preferências, brutos
     
+    
+    def plota_preferências(self, matriz, i):
+        jogadores = self.jogadores
+        plt.xticks(ticks=range(len(matriz)), labels=formata_nomes(jogadores), rotation=90)
+        plt.yticks(ticks=range(len(matriz)), labels=formata_nomes(jogadores))
+        plt.title('Escolhas de cada czar (normalizadas)')
+        plt.xlabel('Autor da resposta')
+        plt.ylabel('Czar')
+        
+        n_max = max(max(i) for i in matriz)
+        cmap = plt.cm.get_cmap('Blues')#, n_max+1)
+        heatmap = plt.imshow(matriz, cmap=cmap, interpolation='nearest')#, norm=LogNorm())
+        plt.colorbar(heatmap)
+        # if salvar: 
+        plt.savefig(f'heatmap_{i}.png', dpi=320, bbox_inches='tight')
+        plt.show()
     
     
     @não_vazio
@@ -376,9 +421,9 @@ class Partida:
             from bokeh.palettes import Spectral10 as cor
             from bokeh.models import HoverTool
             X = dados[0]
-            p = figure(width=1000, height=700, title='Métrica de Humor')
+            p = figure(width=1000, height=700, title='Histórico de Pontos')
             p.xaxis.axis_label = 'Rodada'
-            p.yaxis.axis_label = 'Coeficiente comédia'
+            p.yaxis.axis_label = 'Pontos'
             
             for n, Y in enumerate(dados[1].transpose()):
                 plot = p.line(X, Y, 
@@ -408,21 +453,15 @@ class Partida:
         #             for jogador in self.jogadores}
         curvas = []
         # for jogador, lista in vitórias.items():
-        for jogador, pontos in vitórias(pontuação(self.ata, self.jogadores)).items():
+        for jogador, pontos in self.vitórias().items():
             lista = pontos
             curva = list(accumulate(lista, initial=0))
-            if jogador == 'João Matoso': print(f'{lista=}')
             if normalizar:
                 jogou = [0] + [1 if jogador in rodada.jogadores #and jogador not in rodada.chumps
                          else 0 for rodada in self.histórico]
                 pesos = [len(rod.jogadores) for rod in self.histórico]
                 curva = list(accumulate([i*p for i,p in zip(lista, pesos)], initial=0))
                 n_jogos = list(accumulate(jogou))
-                print(jogador)
-                print(f'{jogou=}', len(jogou), end='\n\n')
-                print(f'{curva=}', len(curva), end='\n\n')
-                print(f'{n_jogos=}', len(n_jogos), end='\n\n')
-                print()
                 curva = [1 if (vit,jog)==(0,0) else vit/max(1,jog) for vit, jog in zip(curva, n_jogos)]
                 curva = [2*i/(i+1)-1 for i in curva]
             curvas.append(curva)
@@ -457,18 +496,19 @@ class Partida:
 
     
     @não_vazio
-    def plot_distribuição_pontos(self):
+    def plot_distribuição_pontos(self, salvar=False):
         pontos_finais = Counter(rodada.vencedor for rodada in self.histórico)
         jogadores, pontos = zip(*pontos_finais.most_common())
-        plt.plot(jogadores, pontos, 'o-')
+        plt.plot(formata_nomes(jogadores), pontos, 'o-')
         plt.title('Distribuição final de pontos')
         plt.ylabel('Pontos')
         plt.xticks(rotation=45)
+        if salvar: plt.savefig('distribuição_pontos.png', dpi=320, bbox_inches='tight')
         plt.show()
 
 
     @não_vazio
-    def horários(self, tipo='grupo'):
+    def horários(self, tipo='grupo', salvar=False):
         if tipo in self.jogadores:
             horas = [rodada.data_finalizada.hour for rodada in self.histórico 
                      if rodada.czar==tipo]
@@ -480,7 +520,7 @@ class Partida:
             horas = [rodada.data_recebida.hour for rodada in self.histórico] \
                     + [rodada.data_finalizada.hour for rodada in self.histórico]
         else:
-            raise ValueError('Esse não é um nome ou categoria válido')
+            raise ValueError(f'"{tipo}" não é um nome ou categoria válido')
         
         barras, _ = np.histogram(horas, bins=24, range=(0,24), density=True)
         
@@ -496,12 +536,13 @@ class Partida:
                    labels=['16:00', '12:00', '8:00', '4:00', '0:00', '20:00'])
         plt.yticks(np.linspace(0.05, 0.05+max(barras), 5), labels=[])
         plt.grid(alpha=0.2)
+        if salvar: 
+            plt.savefig('horários.png', dpi=320, bbox_inches='tight')
         plt.show()
 
     
     @não_vazio
-    def demora(self):
-        from matplotlib.colors import LogNorm
+    def demora(self, salvar=False):
         czar2num = dict(zip(self.jogadores, range(len(self.jogadores))))
         tempos = []
         czares = []
@@ -515,7 +556,10 @@ class Partida:
         cores = plt.get_cmap('plasma')
         hist = plt.hist2d(czares, tempos, bins=(10, 13), cmin=1, cmap=cores,
                           range=((0,10),(0,13)), norm=LogNorm())
-        plt.colorbar(hist[3])
+
+        plt.colorbar(hist[3], format='%d', 
+                     ticks=range(0, int(np.nanmax(hist[0]))+1),
+                     label = 'número de ocorrências')
         plt.title('Tempo de escolha por czar')
         plt.ylabel('Tempo até escolher (horas)')
         plt.xticks(range(10), labels='', rotation=45)
@@ -529,6 +573,8 @@ class Partida:
         for tick in ax.xaxis.get_minor_ticks():
             tick.tick1line.set_markersize(0)
             tick.tick2line.set_markersize(0)
+        if salvar:
+            plt.savefig('demora.png', dpi=320, bbox_inches='tight')
         plt.show()
 
     
@@ -538,17 +584,19 @@ def main():
     partidas = Partida.from_json(path)
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
-    
-    cah = sum(partidas[-2:], start=Partida([]))
+    cah = sum(partidas[4:], start=Partida([]))
     
     # cah.plot_chances(normalizar=False)
-    # cah.plot_heatmap(normalizar=False, salvar=False)
-    # cah.plot_histórico(suavizar=False, salvar=False)
-    # cah.plot_distribuição_pontos()
-    # cah.horários()
-    # cah.demora()
-    cah.plot_histórico(normalizar=False, espalhar=False, bokeh=True)
     
+    cah.plot_heatmap(normalizar=True, salvar=False)
+    # cah.plot_histórico(suavizar=True, espalhar=False, bokeh=True, salvar=False)
+    # cah.plot_distribuição_pontos(salvar=False)
+    cah.horários(salvar=False)
+    cah.demora(salvar=False)
+    cah.plot_histórico(normalizar=True, espalhar=False, bokeh=True)
+    # a, b = cah.matrizes_preferências()
+    # for i, rod in enumerate(a):
+    #     cah.plota_preferências(rod, i)
 
 if __name__=="__main__":
     main()
