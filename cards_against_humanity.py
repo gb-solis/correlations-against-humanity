@@ -36,23 +36,42 @@ TODO: transição para objetos
                 bugadas talvez tenha que ser criada também, eventualmente
         [ ] trocar vencedores errôneos: se o vencedor da última rodada tiver seus
             pontos diminuídos de 1 e os outra pessoa +1, assumir vencedor errôneo
+            
 '''
 import json
 from collections import Counter
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 from scipy.interpolate import pchip_interpolate
-from itertools import accumulate
+from itertools import accumulate, chain
 
 from classes import (Mensagem, AlteraPonto, Recebida, Finalizada, Rodada,
                      PerdePonto, Atraso, HurryUp, HurryJudge, Entrou, Início)
 
 verbose = False
 
+######################### Funções utilidade ###################################
+
+
 # Print only if verbose is True
 def printv(*args, **kwargs):
     if verbose: print(*args, **kwargs)
+
+
+def formata_nomes(nomes, tipo='formal'):
+    def formata(nome):
+        partes = nome.split()
+        if len(partes)==1:
+            return nome
+        else:
+            if tipo=='formal': return f'{partes[0][0]}. {partes[-1]}'
+            elif tipo=='informal': return partes[0]
+    return list(map(formata, nomes))
+
+
+########################### Funções auxiliares ################################
 
 
 def abre_dados(path):
@@ -73,17 +92,6 @@ def abre_dados(path):
     return jogos
 
 
-def formata_nomes(nomes, tipo='formal'):
-    def formata(nome):
-        partes = nome.split()
-        if len(partes)==1:
-            return nome
-        else:
-            if tipo=='formal': return f'{partes[0][0]}. {partes[-1]}'
-            elif tipo=='informal': return partes[0]
-    return list(map(formata, nomes))
-
-
 def parser(mensagem):
     '''lê a mensagem e a interpreta "o que está acontecendo", retornando uma
     Mensagem com as informações relevantes'''
@@ -95,7 +103,8 @@ def parser(mensagem):
         evento = Recebida
     elif 'wins a point!' in texto[0] or 'wins a point!' in texto:
         evento = Finalizada
-    elif "'s score has been changed" in texto[2]:
+    elif "'s score has been changed" in texto or \
+    "'s score has been changed" in texto[2]:
         evento = AlteraPonto
     elif 'Judge was too slow,' in texto[0]:
         evento = PerdePonto
@@ -117,72 +126,10 @@ def parser(mensagem):
     return evento.from_dict(mensagem)
 
 
-# deprecado?
-def altera_pontos(altera_A, altera_B, histórico):
-    '''Altera os pontos dos jogadores A e B. Assume que apenas um ponto é
-    passado, daquele dentre os dois que por último venceu, para o outro.'''
-    # if altera_A.altera_pontos == altera_B.altera_pontos:
-    if altera_A.jogador == altera_B.jogador:
-        printv(f'Pontos foram alterados de {altera_A.jogador} duas vezes '
-                'seguidas, sem tirar de mais ninguém. Não sei lidar com isso ainda')
-    else:
-        for i, rodada in enumerate(reversed(histórico)):
-            candidatos = {altera_A.jogador, altera_B.jogador}
-            if rodada.vencedor in candidatos:
-                candidatos.remove(rodada.vencedor)
-                novo_vencedor = candidatos.pop()
-                # rodada_corrigida = rodada.replace(vencedor=novo_vencedor)
-                rodada.vencedor = novo_vencedor
-                break
-        # histórico[-(i+1)] = rodada_corrigida
-
-
-# deprecado?
 def crawler(mensagens):
-    '''lê as mensagens em "mensagens" e registra qual czar deu vitória a que
-    respondente; retorna um histórico dos czares e vencedores, e a lista dos
-    participantes'''
-    histórico = [] # lista de tuplas contendo informações sobre cada rodada
-    jogadores = [] # lista dos que mandaram ao menos uma carta ou foram czar
-    
-    rodada_A = rodada_B = None
-    altera_A = altera_B = None
-    
-    for mensagem in mensagens:
-        evento = parser(mensagem)
-        # se é do tipo "all answers received!"
-        if isinstance(evento, Recebida):
-        # if rodada.recebida:
-            rodada_A = evento
-        # se é do tipo "X wins a point!"
-        # elif rodada.finalizada and rodada_A is not None:
-        elif isinstance(evento, Finalizada) and rodada_A is not None: 
-            rodada_B = evento
-            czar, vencedor = rodada_A.czar, rodada_B.vencedor
-            if czar != vencedor:
-                # dados_rodada = combina_dados(rodada_A, rodada_B)
-                rodada = Rodada.from_pair(rodada_A, rodada_B)
-                histórico.append(rodada)
-                jogadores.extend(jog for jog in (czar, vencedor) 
-                                 if jog not in jogadores)       
-                rodada_A = rodada_B = None
-            else:
-                printv(f'Erro! Vencedor {vencedor} é também o czar. Descartei')
-        # se está alterando os pontos de um jogador manualmente
-        elif isinstance(evento, AlteraPonto):
-            if altera_A is None:
-                altera_A = evento
-            else:
-                altera_B = evento
-                altera_pontos(altera_A, altera_B, histórico)
-                altera_A = altera_B = None
-    return histórico, jogadores
-
-
-def crawler2(mensagens):
-    ata = []
-    jogadores = []
-    recebida = finalizada = None # rodada é feita do par recebida + finalizada
+    ata = [] # lista dos eventos ocorridos
+    jogadores = [] # lista dos participantes
+    recebida = finalizada = None # rodada é composta pelo par recebida + finalizada
     for evento in map(parser, mensagens):
         if isinstance(evento, Recebida):
             recebida = evento
@@ -202,7 +149,6 @@ def crawler2(mensagens):
         else:
             ata.append(evento)
     return ata, jogadores
-
 
 
 def conta(histórico, jogadores):
@@ -226,16 +172,21 @@ def conta(histórico, jogadores):
     return contagem
 
 
+######################### Classe partida ######################################
+
+
 class Partida:
     def __init__(self, jogo):
         self.jogo = jogo
-        self.ata, self.jogadores = crawler2(jogo)
+        self.ata, self.jogadores = crawler(jogo)
         self.histórico = [rod for rod in self.ata if isinstance(rod, Rodada)]
         self.contagem = conta(self.histórico, self.jogadores)
+        self.pontos = self.pontos_()
+        self.vitórias = self.vitórias_()
     
     def __repr__(self):
         return f'Jogo de {len(self.jogo)} rodadas, iniciado em dd/mm/yy, '\
-               f'entre {sorted(self.jogadores)}'
+               f'entre {self.jogadores}'
                
     def __add__(self, outro):
         jogo = self.jogo.copy()
@@ -257,13 +208,12 @@ class Partida:
                 return método(self, *args, **kwargs)
         return método_corrigido
     
+    ############################# Métodos #####################################
     
-    def pontuação(self):
-        ata = self.ata
-        jogadores = self.jogadores
-        dados = dict.fromkeys(jogadores, [0])
-        # pts_início = dict.fromkeys(jogadores, 0)
-        for evento in ata:
+    def pontos_(self):
+        '''corrige a pontuação baseado nas mudanças de ponto'''
+        dados = dict.fromkeys(self.jogadores, [0])
+        for evento in self.ata:
             if isinstance(evento, Início):
                 pts_início = {jog: val[-1] for jog, val in dados.items()}
             if isinstance(evento, Rodada):
@@ -281,8 +231,8 @@ class Partida:
         return {jogador: pontos for jogador, pontos in dados.items()}
     
     
-    def vitórias(self):
-        pontos = self.pontuação()
+    def vitórias_(self):
+        pontos = self.pontos_()
         def diff_segura(a,b):
             if a is None and b is None:
                 return None
@@ -293,9 +243,6 @@ class Partida:
         vits = {jog: [diff_segura(pts[i], pts[i-1]) for i in range(1,len(pts))] 
                 for jog, pts in pontos.items()}
         return vits    
-    
-    
-    
     
     
     @não_vazio
@@ -369,7 +316,7 @@ class Partida:
             N = len(rodada.jogadores)
             i_czar = self.jogadores.index(rodada.czar)
             n_escolhas_czar[i_czar] += 1
-            for jogador, vitórias in self.vitórias().items():
+            for jogador, vitórias in self.vitórias.items():
                 i_jog = self.jogadores.index(jogador)
                 n_jogos_jogador[i_jog] += 1
                 vit = vitórias[i]
@@ -404,7 +351,7 @@ class Partida:
                        salvar=False, normalizar=False, bokeh=False):
         '''plota o histórico de pontos de cada jogador'''
         
-        deltaV = 0.07 if not normalizar else 0.01# Valor mágico
+        deltaV = 0.07 if not normalizar else 0.01 # Valor mágico
         # Se temos n pontos de mesmo valor, espalhamos o valor para melhor visualização
         def espalhar_pontos(valor, n):
             return np.linspace(valor+(n-1)*deltaV/2, valor-(n-1)*deltaV/2, n)
@@ -448,12 +395,8 @@ class Partida:
             if mostrar:
                 show(p)
 
-        # vitórias = {jogador: [1 if jogador==rodada.vencedor else 0
-        #                       for rodada in self.histórico] 
-        #             for jogador in self.jogadores}
         curvas = []
-        # for jogador, lista in vitórias.items():
-        for jogador, pontos in self.vitórias().items():
+        for jogador, pontos in self.vitórias.items():
             lista = pontos
             curva = list(accumulate(lista, initial=0))
             if normalizar:
@@ -497,8 +440,11 @@ class Partida:
     
     @não_vazio
     def plot_distribuição_pontos(self, salvar=False):
-        pontos_finais = Counter(rodada.vencedor for rodada in self.histórico)
-        jogadores, pontos = zip(*pontos_finais.most_common())
+        # pontos_finais = Counter(rodada.vencedor for rodada in self.histórico)
+        pontos_finais = {jog: pontos[-1] for jog, pontos in self.pontos.items()}
+        # jogadores, pontos = zip(*pontos_finais.most_common())
+        jogadores, pontos = zip(*sorted(pontos_finais.items(), 
+                                        key=lambda d: d[1], reverse=True))
         plt.plot(formata_nomes(jogadores), pontos, 'o-')
         plt.title('Distribuição final de pontos')
         plt.ylabel('Pontos')
@@ -564,7 +510,6 @@ class Partida:
         plt.ylabel('Tempo até escolher (horas)')
         plt.xticks(range(10), labels='', rotation=45)
         
-        
         ax = plt.gca()
         # Customize minor tick labels
         ax.set_xticks([i+0.5 for i in range(10)], minor=True)
@@ -576,27 +521,45 @@ class Partida:
         if salvar:
             plt.savefig('demora.png', dpi=320, bbox_inches='tight')
         plt.show()
-
     
+    def atrasos(self, salvar=False):
+        def plota_dados(tipo, título):
+            dados = chain(*[msg.atrasados for msg in self.ata if isinstance(msg, tipo)])
+            conta_dados = Counter(dados)
+            pessoas, atrasos = zip(*conta_dados.most_common())
+            pessoas = formata_nomes(pessoas)
+            plt.bar(pessoas, atrasos, width=0.9, label=título)
+            plt.title('Pontualidade por jogador')
+            plt.ylabel('número de ocorrências')
+            ax = plt.gca()
+            ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+            plt.xticks(rotation=45)
+        
+        plota_dados(HurryUp, 'demoras')
+        plota_dados(Atraso, 'atrasos')
+        plt.legend()
+        if salvar:
+            plt.savefig('pontualidade.png', dpi=320, bbox_inches='tight')
+        plt.show()
+    
+
+def análise_individual(jogo, salvar=False):
+    jogo.plot_heatmap(normalizar=False, salvar=salvar)
+    jogo.plot_distribuição_pontos(salvar=salvar)
+    jogo.horários(salvar=salvar)
+    jogo.demora(salvar=salvar)
+    jogo.plot_histórico(normalizar=False, espalhar=True, salvar=salvar)
+    jogo.atrasos(salvar=salvar)
+
 def main():
     path = 'result.json'
 
     partidas = Partida.from_json(path)
     última = partidas[-1]
     todas = sum(partidas[4:], start=Partida([]))
-    cah = sum(partidas[4:], start=Partida([]))
+    cah = sum(partidas[-1:], start=Partida([]))
     
-    # cah.plot_chances(normalizar=False)
-    
-    cah.plot_heatmap(normalizar=True, salvar=False)
-    # cah.plot_histórico(suavizar=True, espalhar=False, bokeh=True, salvar=False)
-    # cah.plot_distribuição_pontos(salvar=False)
-    cah.horários(salvar=False)
-    cah.demora(salvar=False)
-    cah.plot_histórico(normalizar=True, espalhar=False, bokeh=True)
-    # a, b = cah.matrizes_preferências()
-    # for i, rod in enumerate(a):
-    #     cah.plota_preferências(rod, i)
+    análise_individual(cah, salvar=True)
 
 if __name__=="__main__":
     main()

@@ -34,10 +34,21 @@ class AlteraPonto(Mensagem):
     def parser(self):
         '''le o texto em self.texto e retorna os atributos relevantes'''
         mensagem = self.texto
-        jogador = ' '.join(mensagem[0].split()[1:-1])
-        pontos = int(mensagem[-1].split()[-1])
-        return {'jogador': jogador, 'pontos': pontos}
-
+        if isinstance(mensagem, str):
+            try:
+                match = re.match("Player  (?P<jogador>.+) 's score has been changed "
+                                 "to (?P<pontos>[0-9]+)", mensagem)
+                jogador = match['jogador']
+                pontos = int(match['pontos'])
+                return {'jogador': jogador, 'pontos': pontos}
+            except:
+                print(repr(mensagem))
+        elif isinstance(mensagem, list):
+            jogador = ' '.join(mensagem[0].split()[1:-1])
+            pontos = int(mensagem[-1].split()[-1])
+            return {'jogador': jogador, 'pontos': pontos}
+        else:
+            raise TypeError(f'mensagem não pode ser do tipo {type(mensagem)}')
 
 @dataclass
 class Recebida(Mensagem):
@@ -118,6 +129,7 @@ class PerdePonto(Mensagem):
         dados = re.match('Judge was too slow,  (?P<czar>.*) \(', mensagem[0])
         return dados.groupdict()
 
+
 @dataclass
 class HurryUp(Mensagem):
     def __post_init__(self):
@@ -129,14 +141,25 @@ class HurryUp(Mensagem):
         
     def parser(self):
         mensagem = self.texto
-        if isinstance(mensagem, list):
-            nomes = [i.strip(' ()') for i in mensagem[:-1] if isinstance(i,str)]
-            nomes = sum((i.split(', ') for i in nomes), start=[])
-            nomes = [i.strip() for i in nomes]
-            return nomes
-        elif isinstance(mensagem, str):
-            nomes = mensagem[:-len('needs to hurry up! Tick-tock...')] # pode ser need se plural
-            return [nomes]
+        pattern = ',  | and  | needs? to hurry up! Tick-tock...'
+        pattern2 = pattern + '| \(|\)'
+        if isinstance(mensagem, str):
+            jogadores = re.split(pattern, mensagem)
+            return list(filter(bool, jogadores))
+        elif isinstance(mensagem, list):
+            atrasados = []
+            for item in mensagem:
+                if isinstance(item, str):
+                    jogadores = re.split(pattern2, item)
+                    atrasados.extend(filter(bool, jogadores))
+                elif isinstance(item, dict):
+                    pass
+                else:
+                    raise ValueError(f'mensagem não pode conter {type(item)}')
+            return atrasados
+        else:
+            raise ValueError(f'mensagem não pode ser do tipo {type(mensagem)}')
+        
         
 @dataclass
 class Atraso(Mensagem):
@@ -148,8 +171,24 @@ class Atraso(Mensagem):
         f'{", ".join(self.atrasados)} atrasaram' 
       
     def parser(self):
-        return [''] # TODO
-
+        mensagem = self.texto
+        pattern = ',  | and  | can suck it for not answering in time:'
+        pattern2 = pattern + '| \(|\)'
+        if isinstance(mensagem, str):
+            jogadores = re.split(pattern, mensagem)
+            return list(filter(bool, jogadores))
+        elif isinstance(mensagem, list):
+            atrasados = []
+            for item in mensagem:
+                if isinstance(item, str):
+                    jogadores = re.split(pattern2, item)
+                    atrasados.extend(filter(bool, jogadores))
+                elif isinstance(item, dict):
+                    pass
+                else:
+                    raise ValueError(f'mensagem não pode conter {type(item)}')
+            return atrasados
+        
 
 @dataclass
 class HurryJudge(Mensagem):
@@ -177,6 +216,7 @@ class Entrou(Mensagem):
         nome = self.texto[:-len(' has joined the game')]
         return nome.strip()
     
+    
 @dataclass
 class Início(Mensagem):
     def __post_init__(self):
@@ -191,7 +231,6 @@ class Início(Mensagem):
         return nome.strip()
 
 
-
 class Rodada(Recebida, Finalizada):
     def __init__(self, czar=None, vencedor=None, pergunta=None, resposta=None,
                  alternativas=None, data_recebida=None, data_finalizada=None, 
@@ -203,6 +242,7 @@ class Rodada(Recebida, Finalizada):
         self.pergunta = pergunta
         self.resposta = resposta
         self.alternativas = alternativas
+        self.data = data_recebida
         self.data_recebida = data_recebida
         self.data_finalizada = data_finalizada
         self.texto_recebida = texto_recebida
